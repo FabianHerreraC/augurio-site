@@ -522,6 +522,10 @@ html, body {
   position: relative;
   aspect-ratio: 2560 / 1682;
   width: 100%;
+  /* En móvil el SVG del polígono se lleva a su sitio con un scale de 3.5: su
+     caja pasa a medir 1382 px y, aunque es invisible, arrastraba scroll
+     lateral en toda la página. La composición se recorta al marco. */
+  overflow: hidden;
   /* las medidas tipográficas van en cqw: proporcionales al marco, no al
      viewport, porque el marco puede ser más angosto que la pantalla */
   container-type: inline-size;

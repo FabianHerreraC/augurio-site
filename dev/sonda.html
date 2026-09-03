@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<title>Sonda</title>
+<!--
+  Monta el sitio en un iframe del tamaño exacto de un dispositivo. Es la única
+  forma fiable de comprobar el responsive: dentro del iframe, vw, svh y las
+  media queries resuelven contra ese tamaño y no contra la ventana real.
+
+    ?w=390&h=844    teléfono
+    ?w=1440&h=900   escritorio
+-->
+<style>
+  body { margin: 0; display: flex; gap: 16px; background: #1c1c1c; color: #eee;
+         font: 13px/1.5 ui-monospace, Menlo, monospace; }
+  #marco { flex: 0 0 auto; border: 0; background: #000; }
+  #lado { flex: 1 1 auto; padding: 16px 16px 40px 0; max-height: 100vh; overflow: auto; }
+  button { font: inherit; padding: 6px 14px; background: #eee; border: 0; cursor: pointer; }
+  h2 { font-size: 13px; margin: 18px 0 6px; color: #9ad; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 2px 8px 2px 0; vertical-align: top; }
+  td:first-child { color: #999; white-space: nowrap; }
+  .ok::before  { content: "OK  "; color: #7c7; }
+  .mal::before { content: "MAL "; color: #f77; }
+  .mal { color: #f99; }
+  #resumen { margin-top: 14px; font-weight: 700; }
+</style>
+
+<iframe id="marco" src="../index.html"></iframe>
+<div id="lado">
+  <button id="run">Comprobar</button>
+  <span id="tam"></span>
+  <div id="salida"></div>
+  <div id="resumen"></div>
+</div>
+
+<script>
+const p = new URLSearchParams(location.search);
+const W = +(p.get('w') || 390), H = +(p.get('h') || 844);
+const marco = document.getElementById('marco');
+marco.style.width = W + 'px';
+marco.style.height = H + 'px';
+document.getElementById('tam').textContent = ` ${W}x${H} ${W <= 900 ? '(móvil)' : '(escritorio)'}`;
+
+const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+const rect = (d, sel) => {
+  const e = d.querySelector(sel);
+  if (!e) return null;
+  const r = e.getBoundingClientRect();
+  return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+};
+
+const pruebas = [];
+const comprobar = (nombre, cond, detalle) => pruebas.push({ nombre, ok: !!cond, detalle });
+
+async function correr() {
+  pruebas.length = 0;
+  const salida = document.getElementById('salida');
+  salida.innerHTML = '<p>cargando…</p>';
+
+  // recarga limpia: sin esto el iframe reutiliza el documento anterior y se
+  // mide un estado viejo, que ya dio una lectura falsa una vez
+  await new Promise((r) => { marco.onload = r; marco.src = '../index.html?v=' + Date.now(); });
+  const w = marco.contentWindow, d = w.document;
+  await esperar(2000);
+
+  const movil = W <= 900;
+  const seccion = (id) => d.getElementById(id);
+
+  // ---- que los cuatro módulos hayan arrancado ----------------------------
+  comprobar('el campo de puntos pinta en las 4 secciones',
+    ['dust', 'gatoCanvas', 'mano', 'probsCanvas'].every((id) => {
+      const c = d.getElementById(id);
+      return c && c.width > 0 && c.height > 0;
+    }), 'canvas con tamaño > 0');
+
+  // ---- gato: coreografía de scroll ---------------------------------------
+  const gato = seccion('gato');
+  const top0 = gato.getBoundingClientRect().top + w.scrollY;
+  const rec = gato.offsetHeight - w.innerHeight;
+  const leer = () => ({
+    frase: Array.from(d.querySelectorAll('.gato__frase')).findIndex((f) => f.classList.contains('is-in')),
+    trazos: Array.from(d.querySelectorAll('.gato__traza path'))
+      .filter((t) => (t.style.strokeDashoffset || '').startsWith('0')).length,
+    malla: d.getElementById('gatoMalla').classList.contains('is-in')
+  });
+
+  const hitos = [];
+  for (const q of [0.02, 0.25, 0.50, 0.75]) {
+    w.scrollTo(0, Math.round(top0 + q * rec));
+    await esperar(700);
+    hitos.push({ q, ...leer() });
+  }
+  comprobar('gato: la frase avanza con el scroll',
+    hitos[0].frase === -1 && hitos[1].frase >= 1 && hitos[3].frase === 5,
+    hitos.map((h) => `q${h.q}→frase ${h.frase}`).join('  '));
+  comprobar('gato: la traza se dibuja',
+    hitos[1].trazos >= 1 && hitos[3].trazos === 5,
+    hitos.map((h) => `q${h.q}→${h.trazos}/5`).join('  '));
+  comprobar('gato: la malla final se cierra', hitos[3].malla, '');
+
+  // El marco lleva números y trazos; el lienzo se amplía por separado desde
+  // app.js. Si se desincronizan, los números dejan de caer sobre el gato.
+  const gm = rect(d, '.gato__marco');
+  comprobar('gato: marco y lienzo con el mismo encuadre',
+    movil ? Math.abs(gm.w - W * 1.8) < 6 : Math.abs(gm.w - Math.min(W, H * 2560 / 1696)) < 6,
+    `marco ${gm.w}px de ancho`);
+
+  const nums = Array.from(d.querySelectorAll('.gato__num')).map((e) => e.getBoundingClientRect());
+  const ancho = Math.max(...nums.map((r) => r.left)) - Math.min(...nums.map((r) => r.left));
+  // En móvil el marco desborda la pantalla y la constelación abarca ~63%; en
+  // escritorio cabe entero y abarca ~33%, que es lo que marca la maqueta. El
+  // caso que hay que atrapar es el marco encogido, con los números apiñados.
+  comprobar('gato: los números quedan repartidos, no apiñados',
+    ancho > W * (movil ? 0.5 : 0.25),
+    `abarcan ${Math.round(ancho)}px de ${W} (${Math.round(ancho / W * 100)}%)`);
+
+  // ---- problemas ---------------------------------------------------------
+  const probs = seccion('probs');
+  w.scrollTo(0, probs.getBoundingClientRect().top + w.scrollY);
+  await esperar(600);
+
+  const cuadro = rect(d, '.probs__cuadro'), barra = rect(d, '.probs__abajo');
+  comprobar('problemas: la barra va debajo del cuadro, sin solaparlo',
+    barra.y >= cuadro.y + cuadro.h - 2, `cuadro acaba en ${cuadro.y + cuadro.h}, barra empieza en ${barra.y}`);
+  comprobar('problemas: nada se sale del marco por los lados',
+    cuadro.x >= 0 && cuadro.x + cuadro.w <= W + 1, `cuadro ${cuadro.x}…${cuadro.x + cuadro.w} de ${W}`);
+
+  // el polígono cubre el marco entero: sin pointer-events:none roba los clics
+  const puntos = Array.from(d.querySelectorAll('.probs__punto'));
+  const alcanzables = puntos.filter((b) => {
+    const r = b.getBoundingClientRect();
+    const e = d.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+    return e && e.classList && e.classList.contains('probs__punto');
+  }).length;
+  comprobar('problemas: los 10 puntos del menú reciben el toque',
+    alcanzables === puntos.length, `${alcanzables}/${puntos.length} alcanzables`);
+
+  // la mitad de la frase tiene que caber dentro del polígono, en las 10
+  let desborde = 0;
+  const arriba = d.querySelector('.probs__arriba');
+  const poli = d.getElementById('probsPoli');
+  for (let i = 0; i < puntos.length; i++) {
+    puntos[i].click();
+    await esperar(300);
+    if (arriba.getBoundingClientRect().height > poli.getBoundingClientRect().height * 0.68) desborde++;
+  }
+  comprobar('problemas: las 10 frases caben en el polígono',
+    desborde === 0, desborde ? `${desborde} se desbordan` : 'ninguna se desborda');
+
+  // ---- mano --------------------------------------------------------------
+  const mano = seccion('quehace');
+  const mTop = mano.getBoundingClientRect().top + w.scrollY;
+  const mRec = mano.offsetHeight - w.innerHeight;
+  w.scrollTo(0, Math.round(mTop + 0.5 * mRec));
+  await esperar(800);
+  const tarjeta = d.querySelector('.quehace__tarjeta');
+  comprobar('mano: la tarjeta y los hitos aparecen',
+    tarjeta.classList.contains('is-in') &&
+    d.querySelectorAll('.hito.is-activo').length === 1, '');
+
+  const titular = rect(d, '.quehace__titular');
+  comprobar('mano: el titular no se sale de la pantalla',
+    titular.x >= -1 && titular.x + titular.w <= W + 1,
+    `${titular.x}…${titular.x + titular.w} de ${W}`);
+
+  // un sizer sin su regla CSS dibuja el titular por duplicado
+  const sizer = d.querySelector('.quehace__frase-sizer');
+  comprobar('mano: el medidor del titular sigue oculto',
+    sizer && w.getComputedStyle(sizer).visibility === 'hidden', '');
+
+  // ---- sin scroll horizontal en toda la página ---------------------------
+  comprobar('la página no se desplaza en horizontal',
+    d.documentElement.scrollWidth <= W + 1,
+    `${d.documentElement.scrollWidth}px de ancho`);
+
+  // ---- pintar ------------------------------------------------------------
+  const fallos = pruebas.filter((t) => !t.ok).length;
+  salida.innerHTML = '<h2>Resultado</h2><table>' + pruebas.map((t) =>
+    `<tr><td class="${t.ok ? 'ok' : 'mal'}"></td><td class="${t.ok ? '' : 'mal'}">${t.nombre}` +
+    (t.detalle ? `<br><span style="color:#888">${t.detalle}</span>` : '') + '</td></tr>').join('') + '</table>';
+  document.getElementById('resumen').innerHTML = fallos
+    ? `<span style="color:#f77">${fallos} de ${pruebas.length} fallan</span>`
+    : `<span style="color:#7c7">las ${pruebas.length} pasan</span>`;
+}
+
+document.getElementById('run').addEventListener('click', correr);
+</script>
+</html>
