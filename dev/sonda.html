@@ -114,6 +114,21 @@ async function correr() {
     movil ? Math.abs(gm.w - W * 1.8) < 6 : Math.abs(gm.w - Math.min(W, H * 2560 / 1696)) < 6,
     `marco ${gm.w}px de ancho`);
 
+  // La tarjeta crece con la frase que le toque. La 5 es la más larga y era la
+  // única que llegaba al borde inferior, así que hay que recorrer las seis.
+  const tarj = [];
+  for (const q of [0.10, 0.23, 0.35, 0.47, 0.60, 0.72]) {
+    w.scrollTo(0, Math.round(top0 + q * rec));
+    await esperar(650);
+    const r = d.getElementById('gatoTarjeta').getBoundingClientRect();
+    tarj.push({ n: tarj.length + 1, aire: Math.round(H - r.bottom), alto: Math.round(r.height) });
+  }
+  const apretada = tarj.filter((c) => c.aire < 24);
+  comprobar('gato: la tarjeta no toca el borde inferior en ninguna frase',
+    apretada.length === 0,
+    apretada.length ? apretada.map((c) => `frase ${c.n}: ${c.aire}px`).join('  ')
+                    : 'aire mínimo ' + Math.min(...tarj.map((c) => c.aire)) + 'px');
+
   const nums = Array.from(d.querySelectorAll('.gato__num')).map((e) => e.getBoundingClientRect());
   const ancho = Math.max(...nums.map((r) => r.left)) - Math.min(...nums.map((r) => r.left));
   // En móvil el marco desborda la pantalla y la constelación abarca ~63%; en

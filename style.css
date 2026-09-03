@@ -813,8 +813,13 @@ html, body {
 
   /* La tarjeta y el rótulo cuelgan del panel, no del marco: la ampliación de
      la escena no les afecta y siguen midiéndose contra la pantalla. */
+  /* La maqueta la arranca en 41.4%, pero con ese ancho la frase 5 —la más
+     larga, 187 caracteres— crece a 258 px y llega justo al borde inferior de
+     la pantalla. Ensanchando a 28% baja a 191 px y le quedan 68 px de aire,
+     el mismo que ya tienen las frases 1 y 3. Más ancho no gana nada: 191 es
+     el suelo. Va abajo del gato, así que no le tapa nada. */
   .gato__tarjeta {
-    left: 41.4%;
+    left: 28%;
     right: 9.3%;
     top: 69.4%;
     padding: 1.1em 1.2em;
