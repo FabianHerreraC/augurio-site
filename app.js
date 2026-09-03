@@ -1,0 +1,984 @@
+/* Motor de campo de puntos.
+   Toma una imagen, la lee como mapa de densidad y la reconstruye como un
+   enjambre de puntos que titilan y derivan levemente. Sirve para tinta clara
+   sobre fondo negro (header) y para tinta oscura sobre papel (sección). */
+function createDotField(canvas, opts) {
+  const o = Object.assign({
+    src: null,
+    dark: false,        // true = puntos oscuros sobre papel claro
+    paper: 10,          // valor del fondo, 0-255
+    inkFloor: 45,       // valor del punto más tenue
+    inkRange: 210,      // recorrido hasta el punto más denso
+    gamma: 0.6,         // curva del brillo del punto
+    wFloor: 0.055,      // peso mínimo: el grano que llena el fondo
+    wGamma: 1.35,       // curva de la densidad
+    maxScale: 1.25,
+    pxPerDot: 20,
+    minDots: 18000,
+    maxDots: 95000,
+    drift: 1.15,
+    fizz: 2.2,          // efervescencia: escala titileo y velocidades
+    scatter: 0,         // dispersión del punto respecto de su píxel, en px a 1440 de ancho
+    scatterFall: 1.3,   // cuánto se apaga la dispersión donde la imagen es densa
+    fit: 'cover',       // 'cover' o 'contain'
+    zoom: 1,            // multiplica el encuadre; 1 = tal cual
+    panX: 0, panY: 0,   // corrimiento, en fracciones del lienzo
+    zoomCap: 1.35,      // tope de acercamiento respecto del encuadre "contain"
+    srcTop: 0,          // fracción superior de la fuente que se descarta
+    prepare: null       // fn(ctx, w, h) para limpiar la fuente antes de muestrear
+  }, opts || {});
+
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const LUT = 1024, MASK = LUT - 1;
+  const SIN = new Float32Array(LUT);
+  for (let i = 0; i < LUT; i++) SIN[i] = Math.sin((i / LUT) * Math.PI * 2);
+
+  let W = 0, H = 0, clean = null, count = 0;
+  let px, py, pv, ph1, ph2, sp1, sp2, amp, dsc;
+  let buf32 = null, imageData = null, lastIdx = null, lastN = 0;
+  let raf = 0, resizeTimer = 0, running = false;
+
+  // Varias opciones pueden ser función para depender del ancho de pantalla:
+  // el encuadre no es el mismo en escritorio que en móvil.
+  const val = (v) => (typeof v === 'function' ? v() : v);
+
+  const BG = (0xff000000 | (o.paper << 16) | (o.paper << 8) | o.paper) >>> 0;
+
+  function prepareSource(img) {
+    const c = document.createElement('canvas');
+    c.width = img.width; c.height = img.height;
+    const cx = c.getContext('2d', { willReadFrequently: true });
+    cx.drawImage(img, 0, 0);
+    if (o.prepare) o.prepare(cx, img.width, img.height);
+    clean = c;
+  }
+
+  function buildField() {
+    const off = document.createElement('canvas');
+    off.width = W; off.height = H;
+    const octx = off.getContext('2d', { willReadFrequently: true });
+    octx.fillStyle = 'rgb(' + o.paper + ',' + o.paper + ',' + o.paper + ')';
+    octx.fillRect(0, 0, W, H);
+
+    const sy = Math.round(clean.height * o.srcTop);
+    const sw = clean.width, sh = clean.height - sy;
+    const cover = Math.max(W / sw, H / sh);
+    const contain = Math.min(W / sw, H / sh);
+    // fit puede ser una función: la sección de problemas encuadra distinto en
+    // móvil, donde el marco es mucho más alto que ancho.
+    const modo = val(o.fit);
+    let s = modo === 'contain' ? contain : Math.min(cover, contain * o.zoomCap);
+    // zoom y paneo van encima del encuadre: la escena del gato se amplía y se
+    // corre en móvil, y los números tienen que seguirla. Son fracciones del
+    // lienzo, así que no dependen de la resolución.
+    s *= val(o.zoom);
+    const dw = sw * s, dh = sh * s;
+    octx.drawImage(clean, 0, sy, sw, sh,
+      (W - dw) / 2 + val(o.panX) * W, (H - dh) / 2 + val(o.panY) * H, dw, dh);
+
+    const data = octx.getImageData(0, 0, W, H).data;
+    const n = W * H;
+
+    const weight = new Float32Array(n);
+    let total = 0;
+    for (let i = 0, p = 0; i < n; i++, p += 4) {
+      let l = (data[p] * 0.299 + data[p + 1] * 0.587 + data[p + 2] * 0.114) / 255;
+      if (o.dark) l = 1 - l;            // sobre papel, manda la oscuridad
+      if (o.cut) l = Math.max(0, (l - o.cut) / (1 - o.cut));
+      const w = l <= 0 && o.cut ? 0 : o.wFloor + (1 - o.wFloor) * Math.pow(l, o.wGamma);
+      weight[i] = w; total += w;
+    }
+
+    const sc = o.scatter * (W / 1440);
+    const target = Math.max(o.minDots, Math.min(o.maxDots, Math.round(n / val(o.pxPerDot))));
+    const k = target / total;
+    const cap = target * 1.4 | 0;
+
+    px = new Float32Array(cap); py = new Float32Array(cap);
+    pv = new Float32Array(cap);
+    ph1 = new Uint16Array(cap); ph2 = new Uint16Array(cap);
+    sp1 = new Float32Array(cap); sp2 = new Float32Array(cap);
+    amp = new Float32Array(cap);
+    dsc = new Float32Array(cap);   // cuánto deriva cada punto por cuadro
+
+    let c = 0;
+    for (let i = 0, p = 0; i < n && c < cap; i++, p += 4) {
+      const prob = Math.min(1, weight[i] * k);
+      let copies = prob | 0;
+      if (Math.random() < prob - copies) copies++;
+      if (!copies) continue;
+
+      let l = (data[p] * 0.299 + data[p + 1] * 0.587 + data[p + 2] * 0.114) / 255;
+      if (o.dark) l = 1 - l;
+      if (o.cut) l = Math.max(0, (l - o.cut) / (1 - o.cut));
+      const base = o.inkFloor + o.inkRange * Math.pow(l, o.gamma);
+
+      // La dispersión se apaga donde la imagen es densa. Uniforme, el aerosol
+      // también vacía el núcleo: los puntos que deberían llenarlo se van a los
+      // lados y la cobertura cae al 60% aunque haya un punto por píxel.
+      // Así el centro queda macizo y sólo el contorno se deshilacha.
+      const suave = sc ? Math.pow(1 - l, o.scatterFall) : 0;
+      const disp = sc * suave;
+
+      for (let j = 0; j < copies && c < cap; j++, c++) {
+        const g1 = (Math.random() + Math.random() + Math.random() - 1.5) * disp;
+        const g2 = (Math.random() + Math.random() + Math.random() - 1.5) * disp;
+        px[c] = (i % W) + (Math.random() - 0.5) * suave + g1;
+        py[c] = (i / W | 0) + (Math.random() - 0.5) * suave + g2;
+        pv[c] = Math.min(255, base * (0.8 + Math.random() * 0.4));
+        ph1[c] = Math.random() * LUT | 0;
+        ph2[c] = Math.random() * LUT | 0;
+        sp1[c] = (0.6 + Math.random() * 2.2) * o.fizz;
+        sp2[c] = (0.15 + Math.random() * 0.5) * o.fizz;
+        // El titileo y la deriva siguen la misma curva que la dispersión.
+        // Con amplitud pareja, el núcleo nunca queda macizo: en cada cuadro
+        // la mitad de sus puntos se aclaran y la zona se lee gris.
+        const vivo = sc ? suave : 1;
+        amp[c] = (0.18 + Math.random() * 0.3) * o.fizz * vivo;
+        dsc[c] = vivo;
+      }
+    }
+    count = c;
+
+    imageData = ctx.createImageData(W, H);
+    buf32 = new Uint32Array(imageData.data.buffer);
+    buf32.fill(BG);
+    lastIdx = new Int32Array(count);
+    lastN = 0;
+  }
+
+  const DARK = o.dark;
+
+  function paint(t) {
+    for (let i = 0; i < lastN; i++) buf32[lastIdx[i]] = BG;
+    let ln = 0;
+
+    for (let i = 0; i < count; i++) {
+      const f = t === null ? 0 : SIN[(ph1[i] + (t * sp1[i] * LUT * 0.16 | 0)) & MASK];
+      let v = pv[i] * (1 + amp[i] * f);
+      if (v <= 2) continue;
+      if (v > 255) v = 255;
+
+      // Redondear, no truncar: con desplazamientos de una fracción de píxel,
+      // truncar manda la mitad de los puntos al píxel anterior y el núcleo
+      // queda agujereado aunque haya un punto sembrado por píxel.
+      let x, y;
+      if (t === null) { x = px[i] + 0.5 | 0; y = py[i] + 0.5 | 0; }
+      else {
+        const d1 = SIN[(ph2[i] + (t * sp2[i] * LUT * 0.16 | 0)) & MASK];
+        const d2 = SIN[(ph2[i] + 256 + (t * sp2[i] * LUT * 0.11 | 0)) & MASK];
+        const dv = o.drift * dsc[i];
+        x = px[i] + d1 * dv + 0.5 | 0;
+        y = py[i] + d2 * dv + 0.5 | 0;
+      }
+      if (x < 0 || y < 0 || x >= W || y >= H) continue;
+
+      // en papel el punto oscurece; sobre negro, ilumina
+      const g = (DARK ? o.paper * (1 - v / 255) : v) | 0;
+      const idx = y * W + x;
+      const cur = buf32[idx] & 0xff;
+      if (DARK ? g < cur : g > cur) buf32[idx] = (0xff000000 | (g << 16) | (g << 8) | g) >>> 0;
+      lastIdx[ln++] = idx;
+    }
+    lastN = ln;
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  function frame(now) {
+    paint(now * 0.001);
+    raf = requestAnimationFrame(frame);
+  }
+
+  function start() {
+    if (running || reduced || !buf32) return;
+    running = true;
+    raf = requestAnimationFrame(frame);
+  }
+  function stop() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  }
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, o.maxScale);
+    const w = Math.max(1, Math.round(rect.width * dpr));
+    const h = Math.max(1, Math.round(rect.height * dpr));
+    if (w === W && h === H) return;
+    W = w; H = h;
+    canvas.width = W; canvas.height = H;
+    if (!clean) return;
+    buildField();
+    paint(reduced ? null : 0);
+  }
+
+  const image = new Image();
+  image.onload = function () {
+    prepareSource(image);
+    resize();
+    if (!reduced) observe();
+  };
+  image.src = o.src;
+
+  // no gastar cuadros mientras la sección no está a la vista
+  function observe() {
+    if (!('IntersectionObserver' in window)) { start(); return; }
+    new IntersectionObserver(function (es) {
+      es[0].isIntersecting ? start() : stop();
+    }, { rootMargin: '120px' }).observe(canvas);
+  }
+
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(resize, 180);
+  });
+  document.addEventListener('visibilitychange', function () {
+    document.hidden ? stop() : start();
+  });
+
+  return { start: start, stop: stop, resize: resize };
+}
+
+/* ---- header: puntos claros sobre negro ---- */
+(function () {
+  const c = document.getElementById('dust');
+  if (c) createDotField(c, { src: 'headerA.png', paper: 10, zoomCap: 1.35 });
+})();
+
+/* ---- sección "qué hace": la mano, puntos oscuros sobre papel ----
+   La fuente (manosola.png) ya viene limpia: sin texto, sin guías y sin banda.
+   Antes había que reconstruir a mano lo que esos elementos tapaban. */
+(function () {
+  const c = document.getElementById('mano');
+  if (!c) return;
+  createDotField(c, {
+    src: 'mano-src.jpg',
+    dark: true,
+    // el papel de la referencia mide 241 de promedio y casi no tiene grano.
+    // El umbral deja el fondo limpio y reserva los puntos para la mano.
+    paper: 243,
+    cut: 0.05,
+    wFloor: 0,
+    inkFloor: 20,
+    inkRange: 235,
+    gamma: 0.75,
+    wGamma: 1.75,
+    maxScale: 1,
+    pxPerDot: 6,
+    maxDots: 320000,
+    drift: 0.9,
+    scatter: 3.6
+  });
+})();
+
+
+/* ---- frase del header: "Conversaciones" fija, la segunda palabra se teclea ---- */
+(function () {
+  const word = document.getElementById('taglineWord');
+  const caret = document.getElementById('taglineCaret');
+  const slot = word && word.closest('.tagline__slot');
+  if (!word || !slot) return;
+
+  const WORDS = ['masivas', 'profundas', 'reveladoras', 'verdaderas', 'valiosas', 'completas'];
+  const TYPE_MS = [55, 95], DEL_MS = [30, 46], HOLD_MS = 1700, GAP_MS = 260;
+
+  // el hueco reserva el ancho de la palabra más ancha: la línea no se mueve
+  slot.querySelectorAll('.tagline__sizer').forEach((n) => n.remove());
+  WORDS.forEach(function (w) {
+    const s = document.createElement('span');
+    s.className = 'tagline__sizer';
+    s.setAttribute('aria-hidden', 'true');
+    s.textContent = w;
+    slot.insertBefore(s, slot.firstChild);
+  });
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    word.textContent = WORDS[0];
+    return;
+  }
+
+  const rand = (r) => r[0] + Math.random() * (r[1] - r[0]);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const idle = (on) => caret && caret.classList.toggle('is-idle', on);
+  const awake = () => document.hidden
+    ? new Promise((res) => document.addEventListener('visibilitychange', function h() {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', h); res();
+      }))
+    : Promise.resolve();
+
+  (async function run() {
+    let i = 0;
+    for (;;) {
+      const w = WORDS[i];
+      idle(false);
+      for (let c = 1; c <= w.length; c++) { word.textContent = w.slice(0, c); await sleep(rand(TYPE_MS)); }
+      idle(true);
+      await sleep(HOLD_MS);
+      await awake();
+      idle(false);
+      for (let c = w.length - 1; c >= 0; c--) { word.textContent = w.slice(0, c); await sleep(rand(DEL_MS)); }
+      idle(true);
+      await sleep(GAP_MS);
+      i = (i + 1) % WORDS.length;
+    }
+  })();
+})();
+
+/* ---- sección "qué hace": la escena queda anclada y se recorre por dentro ----
+   Primero se teclea la frase, después se despliegan las guías de izquierda a
+   derecha, y al final la recta del tiempo va pasando por las cuatro fases.
+   Reversible: al salir del viewport se repliega y vuelve a jugarse. */
+(function () {
+  const sec = document.getElementById('quehace');
+  const frase = document.getElementById('quehaceFrase');
+  const tarjeta = sec.querySelector('.quehace__tarjeta');
+  if (!sec || !frase || !tarjeta) return;
+
+  const indice = document.getElementById('quehaceIndice');
+  const hitos = Array.from(sec.querySelectorAll('.hito'));
+  const descs = Array.from(sec.querySelectorAll('.hito__desc'));
+  const panel = document.getElementById('hitosPanel');
+  const barra = document.getElementById('hitos');
+
+  const fraseTexto = document.getElementById('quehaceFraseTexto');
+  const fraseCaret = document.getElementById('quehaceCaret');
+  const LETRAS = sec.querySelector('.quehace__frase-sizer').textContent;
+
+  const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (reducido) {
+    frase.classList.add('is-in');
+    if (fraseTexto) fraseTexto.textContent = LETRAS;
+    if (tarjeta) tarjeta.classList.add('is-in');
+    barra && barra.classList.add('is-in');
+    hitos.forEach((h) => h.classList.add('is-activo'));
+    descs.forEach((d) => d.classList.add('is-in'));
+    return;
+  }
+
+  // tecleo de la frase, cancelable si la sección se va antes de terminar
+  let token = 0;
+  function tipear(on) {
+    if (!fraseTexto) return;
+    const mio = ++token;
+    if (!on) {
+      fraseTexto.textContent = '';
+      if (fraseCaret) fraseCaret.classList.remove('is-on', 'is-idle');
+      return;
+    }
+    if (fraseCaret) { fraseCaret.classList.add('is-on'); fraseCaret.classList.remove('is-idle'); }
+    let i = 0;
+    (function paso() {
+      if (mio !== token) return;
+      fraseTexto.textContent = LETRAS.slice(0, ++i);
+      if (i < LETRAS.length) { setTimeout(paso, 20 + Math.random() * 26); return; }
+      if (!fraseCaret) return;
+      fraseCaret.classList.add('is-idle');
+      setTimeout(function () {
+        if (mio !== token) return;
+        fraseCaret.classList.remove('is-on', 'is-idle');
+      }, 1400);
+    })();
+  }
+
+  // avance: frase, las dos guías de la izquierda, las dos de la derecha,
+  // y después las cuatro fases
+  const EN_FRASE = 0.02;
+  const EN_HITO = [0.22, 0.40, 0.58, 0.76];
+
+  let puestaFrase = null, hitoActual = -2;
+
+  function altoPanel() {
+    if (!panel) return;
+    panel.style.height = hitoActual >= 0
+      ? descs[hitoActual].getBoundingClientRect().height + 'px'
+      : '0px';
+  }
+
+  function verHito(n) {
+    if (n === hitoActual) return;
+    hitoActual = n;
+    hitos.forEach((h, i) => h.classList.toggle('is-activo', i === n));
+    descs.forEach((d, i) => d.classList.toggle('is-in', i === n));
+    if (tarjeta) tarjeta.classList.toggle('is-in', n >= 0);
+    if (indice) indice.textContent = '0' + (Math.max(0, n) + 1);
+    altoPanel();
+  }
+
+  let ticking = false;
+  function medir() {
+    ticking = false;
+    const r = sec.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    // Con la sección anclada el avance se mide sobre su recorrido. Si la
+    // sección entra entera en la pantalla (móvil, sin anclaje) ese recorrido
+    // es cero o negativo y nada se revelaría: ahí se mide por su entrada.
+    const recorrido = sec.offsetHeight - vh;
+    const q = recorrido > 40
+      ? Math.max(0, Math.min(1, -r.top / recorrido))
+      : Math.max(0, Math.min(1, (vh * 0.85 - r.top) / (vh * 0.7)));
+
+    const onFrase = q >= EN_FRASE;
+    if (onFrase !== puestaFrase) {
+      puestaFrase = onFrase;
+      frase.classList.toggle('is-in', onFrase);
+      onFrase ? setTimeout(() => puestaFrase && tipear(true), 280) : tipear(false);
+    }
+
+    let n = -1;
+    for (let i = 0; i < EN_HITO.length; i++) if (q >= EN_HITO[i]) n = i;
+    // la recta aparece un poco antes que su primera fase
+    if (barra) barra.classList.toggle('is-in', q >= EN_HITO[0] - 0.05);
+    verHito(n);
+  }
+  // mismo cerrojo con caducidad que en la sección del gato: un cuadro
+  // descartado no puede dejar la sección sorda al scroll
+  let pedido = 0;
+  function onScroll() {
+    const ahora = performance.now();
+    if (ticking && ahora - pedido < 300) return;
+    ticking = true; pedido = ahora;
+    requestAnimationFrame(medir);
+  }
+
+  // los hitos también son botones
+  hitos.forEach(function (b, n) {
+    b.addEventListener('click', function () { verHito(n); });
+  });
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', function () { onScroll(); altoPanel(); });
+  medir();
+})();
+
+/* ---- sección del gato ----
+   El canvas y el marco usan el mismo encuadre "contain", así los números
+   caen siempre sobre el mismo punto del gato. */
+const MOVIL_ZOOM = 1.8;    // ver .gato__marco: width 180%
+const MOVIL_PAN = 0.159;   // ver .gato__marco: translateX(8.85%)
+(function () {
+  const c = document.getElementById('gatoCanvas');
+  if (!c) return;
+  createDotField(c, {
+    src: 'gato-src.jpg',
+    paper: 10,
+    fit: 'contain',
+    // En móvil el 'contain' deja al gato en una franja de 258 px de alto: los
+    // trazos que unen los números quedan de 40 px y no se leen. La maqueta lo
+    // trae 1,8 veces más grande y corrido a la derecha. El mismo par de
+    // números está en .gato__marco, que es quien lleva números y trazos.
+    zoom: () => (window.innerWidth <= 900 ? MOVIL_ZOOM : 1),
+    panX: () => (window.innerWidth <= 900 ? MOVIL_PAN : 0),
+    // el gato es una figura fina: con poca densidad las zonas brillantes no
+    // llegan a leerse como trazo lleno. Ampliado 1,8 veces cubre el triple de
+    // área, así que en móvil hay que sembrar más para que no se adelgace.
+    pxPerDot: () => (window.innerWidth <= 900 ? 5 : 9),
+    maxDots: 220000,
+    wGamma: 1.6,
+    prepare: limpiarGato
+  });
+})();
+
+/* Hay que sacarle a la referencia los seis números y la tarjeta blanca.
+   Todos caen sobre fondo negro, sin tocar al gato, así que alcanza con
+   rellenarlos con el promedio del anillo que los rodea.
+   Medidas en el espacio original de 2560x1696. */
+function limpiarGato(cx, w, h) {
+  const k = w / 2560;
+  const im = cx.getImageData(0, 0, w, h), d = im.data;
+  const at = (x, y) => ((y * w + x) << 2);
+  const lum = (x, y) => { const i = at(x, y); return d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114; };
+  const S = (v) => Math.round(v * k);
+
+  function rect(x0, y0, x1, y1) {
+    x0 = S(x0); y0 = S(y0); x1 = S(x1); y1 = S(y1);
+    let s = 0, n = 0;
+    for (let x = x0 - 4; x < x1 + 4; x++)
+      for (const y of [y0 - 4, y0 - 3, y1 + 3, y1 + 4]) {
+        if (x < 0 || x >= w || y < 0 || y >= h) continue;
+        s += lum(x, y); n++;
+      }
+    const base = n ? s / n : 10;
+    for (let y = y0; y < y1; y++)
+      for (let x = x0; x < x1; x++) {
+        if (x < 0 || x >= w || y < 0 || y >= h) continue;
+        const i = at(x, y), v = Math.max(0, base + (Math.random() - .5) * 8);
+        d[i] = d[i + 1] = d[i + 2] = v;
+      }
+  }
+
+  rect(1005, 300, 1085, 368);    // 1.
+  rect(938, 692, 1016, 762);     // 2.
+  rect(1480, 485, 1558, 555);    // 3.
+  rect(582, 826, 660, 898);      // 4.
+  rect(1237, 1073, 1316, 1144);  // 5.
+  rect(751, 1358, 829, 1428);    // 6.
+  // la tarjeta sangra hasta el filo derecho de la referencia (x=2559): si el
+  // borrado se queda corto, la franja que sobra reaparece como cúmulo de puntos
+  rect(1594, 735, 2560, 1055);   // tarjeta blanca
+
+  cx.putImageData(im, 0, 0);
+}
+
+/* Los números entran cuando la escena queda fija a pantalla completa.
+   Después, con el scroll, cada frase reemplaza a la anterior y se traza el
+   segmento que une su número con el anterior. Reversible. */
+(function () {
+  const sec = document.getElementById('gato');
+  const tarjeta = document.getElementById('gatoTarjeta');
+  const pila = document.getElementById('gatoPila');
+  if (!sec || !tarjeta || !pila) return;
+
+  const nums = Array.from(sec.querySelectorAll('.gato__num'));
+  const frases = Array.from(sec.querySelectorAll('.gato__frase'));
+  const rotulo = sec.querySelector('.gato__rotulo');
+  // el rótulo girado cambia con cada frase, igual que la clave del párrafo
+  const ROTULOS = ['COLECTIVO', 'EMERGENTE', 'DISPERSIÓN', 'COMPLEJIDAD', 'TECNOLOGÍA', 'ÚNICO'];
+  const segs = Array.from(sec.querySelectorAll('.gato__traza path'));
+  const malla = document.getElementById('gatoMalla');
+  const aristas = malla ? Array.from(malla.querySelectorAll('path')) : [];
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    nums.forEach((n) => n.classList.add('is-in', 'is-dicho'));
+    tarjeta.classList.add('is-in');
+    frases.forEach((f) => f.classList.add('is-in'));
+    segs.forEach((p) => p.style.strokeDashoffset = 0);
+    aristas.forEach((p) => p.style.strokeDashoffset = 0);
+    return;
+  }
+
+  segs.concat(aristas).forEach(function (p) {
+    const len = p.getTotalLength();
+    p.dataset.len = len;
+    p.style.strokeDasharray = len;
+    p.style.strokeDashoffset = len;
+  });
+
+  // Los umbrales dejan un tramo libre al final: una vez cerrada la malla,
+  // la escena sigue anclada un rato para poder mirarla.
+  const FRASE_EN = [0.08, 0.21, 0.33, 0.45, 0.57, 0.70];
+  let numeros = false, activa = -2;
+
+  // la tarjeta se ciñe a la frase que está: hay que medirla, porque están
+  // superpuestas y ninguna aporta alto al flujo
+  function ajustarAlto() {
+    if (activa < 0) return;
+    pila.style.height = frases[activa].getBoundingClientRect().height + 'px';
+  }
+
+  function medir() {
+    ticking = false;
+    const r = sec.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const recorrido = Math.max(1, sec.offsetHeight - vh);
+    const q = Math.max(0, Math.min(1, -r.top / recorrido));
+
+    const verNums = r.top <= 4;
+    if (verNums !== numeros) {
+      numeros = verNums;
+      nums.forEach((n) => n.classList.toggle('is-in', verNums));
+    }
+
+    let act = -1;
+    for (let i = 0; i < FRASE_EN.length; i++) if (q >= FRASE_EN[i]) act = i;
+
+    if (act !== activa) {
+      activa = act;
+      frases.forEach((f, i) => f.classList.toggle('is-in', i === act));
+      if (rotulo) rotulo.textContent = ROTULOS[Math.max(0, act)];
+      // los números ya recorridos quedan encendidos: el trazo que los une
+      // se mantiene, sería incoherente que ellos se apagaran
+      nums.forEach((n, i) => n.classList.toggle('is-dicho', i <= act));
+      tarjeta.classList.toggle('is-in', act >= 0);
+      // el segmento j une el número j+1 con el j+2: se traza con esa frase
+      segs.forEach((p, j) => p.style.strokeDashoffset = act >= j + 1 ? 0 : p.dataset.len);
+      // cerrada la cadena en la última frase, se abre la malla completa
+      const todos = act >= FRASE_EN.length - 1;
+      if (malla) malla.classList.toggle('is-in', todos);
+      aristas.forEach((p) => p.style.strokeDashoffset = todos ? 0 : p.dataset.len);
+      ajustarAlto();
+    }
+  }
+
+  // El cerrojo se libera dentro del cuadro. Si el navegador descarta ese
+  // cuadro —pestaña en segundo plano, por ejemplo— quedaría cerrado para
+  // siempre y la sección no volvería a responder al scroll: por eso caduca.
+  let ticking = false, pedido = 0;
+  function onScroll() {
+    const ahora = performance.now();
+    if (ticking && ahora - pedido < 300) return;
+    ticking = true; pedido = ahora;
+    requestAnimationFrame(medir);
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', function () { onScroll(); ajustarAlto(); });
+  medir();
+})();
+
+/* ---- sección "problemas" ---- */
+(function () {
+  const PARTES = [
+    [
+      "Gerentes desconectados de la realidad de su empresa,",
+      "que dirigen desde el diagnóstico de hace dos años porque nadie les trajo uno más reciente."
+    ],
+    [
+      "Comunidades reducidas a encuestas y formularios,",
+      "cuya voz real nunca llegó a ningún reporte porque una casilla no tiene espacio para matices."
+    ],
+    [
+      "Equipos que viven en silos de conocimiento",
+      "y jamás han tenido la oportunidad de conversar con sus pares, aunque trabajen a diez metros de distancia."
+    ],
+    [
+      "Conflictos que solo revelan la falta de una imagen completa",
+      "sobre el problema que los originó, y que se resuelven solos en cuanto esa imagen aparece."
+    ],
+    [
+      "Juntas directivas que deciden sobre un consenso fabricado,",
+      "donde nadie se atrevió a decir en la sala lo que sí dijo en el pasillo."
+    ],
+    [
+      "Procesos de planeación estratégica",
+      "que terminan pareciéndose al competidor de moda, en vez de parecerse a la organización que los escribió."
+    ],
+    [
+      "Fusiones y alianzas que fracasan",
+      "porque nunca hubo una conversación real entre las culturas que se estaban uniendo, solo un comunicado de prensa."
+    ],
+    [
+      "Líderes que heredan un cargo",
+      "sin heredar el conocimiento tácito que solo vivía en la cabeza de quien se fue."
+    ],
+    [
+      "Organizaciones que confunden el ruido",
+      "de la voz más poderosa en la sala con la inteligencia colectiva de todo el equipo."
+    ],
+    [
+      "Equipos que llevan años repitiendo el mismo plan",
+      "porque nadie sostuvo la incomodidad de nombrar en voz alta lo que ya no estaba funcionando."
+    ]
+  ];
+
+  const sec = document.getElementById('probs');
+  const poli = document.getElementById('probsPoli');
+  const arriba = document.getElementById('probsArriba');
+  const abajo = document.getElementById('probsAbajo');
+  const sr = document.getElementById('probsSR');
+  const puntos = Array.from(document.querySelectorAll('.probs__punto'));
+  if (!sec || !poli || !arriba || !abajo) return;
+
+  // pentágono medido de la referencia, en unidades del viewBox
+  const BASE = [[1109, 683], [1477, 678], [1528, 764], [1220, 898], [1134, 835]];
+  // Cuánto puede moverse cada vértice: [dxMin, dxMax, dyMin, dyMax].
+  // Los lados que bordean el texto sólo pueden abrirse hacia afuera; si se
+  // permite que entren, hay formas que le cortan una línea a la frase.
+  const RANGO = [
+    [-42,  0, -26,   6],   // arriba-izq: sólo hacia afuera
+    [  0, 56, -34,   8],   // arriba-der
+    [  0, 62, -18,  42],   // punta derecha
+    [-12, 62,   0,  48],   // punta inferior: sólo hacia abajo
+    [-42,  0,  -8,  30]    // codo izquierdo
+  ];
+
+  // ruido determinista: la misma frase da siempre la misma forma
+  function rnd(i, v, c) {
+    const x = Math.sin(i * 127.1 + v * 311.7 + c * 74.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  function forma(i) {
+    if (i === 0) return BASE.map((p) => p.slice());
+    return BASE.map(function (p, v) {
+      const r = RANGO[v];
+      return [p[0] + r[0] + rnd(i, v, 0) * (r[1] - r[0]),
+              p[1] + r[2] + rnd(i, v, 1) * (r[3] - r[2])];
+    });
+  }
+
+  const DURACION = 900;    // lo que tarda en cambiar de forma
+  const ESPERA = 6200;     // lo que dura cada frase en pantalla
+  const suave = (t) => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+  let actual = forma(0), destino = actual, t0 = 0, raf = 0, timer = 0, i = 0, corriendo = false;
+
+  const pintar = (pts) => poli.setAttribute('points', pts.map((p) => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' '));
+
+  function morph(now) {
+    const k = Math.min(1, (now - t0) / DURACION), e = suave(k);
+    pintar(actual.map((p, v) => [p[0] + (destino[v][0] - p[0]) * e, p[1] + (destino[v][1] - p[1]) * e]));
+    if (k < 1) { raf = requestAnimationFrame(morph); return; }
+    actual = destino; raf = 0;
+  }
+
+  function poner(n) {
+    i = ((n % PARTES.length) + PARTES.length) % PARTES.length;
+    arriba.textContent = PARTES[i][0];
+    abajo.textContent = PARTES[i][1];
+    if (sr) sr.textContent = PARTES[i][0] + ' ' + PARTES[i][1];
+    puntos.forEach(function (b, n) {
+      b.classList.toggle('is-activo', n === i);
+      b.setAttribute('aria-current', n === i ? 'true' : 'false');
+    });
+    destino = forma(i);
+    if (raf) cancelAnimationFrame(raf);
+    t0 = performance.now();
+    raf = requestAnimationFrame(morph);
+  }
+
+  function siguiente() {
+    sec.classList.add('is-cambiando');           // se desvanece el texto viejo
+    setTimeout(function () {
+      poner(i + 1);                              // cambia con el texto invisible
+      sec.classList.remove('is-cambiando');
+    }, 360);
+  }
+
+  function arrancar() {
+    if (corriendo) return;
+    corriendo = true;
+    timer = setInterval(siguiente, ESPERA);
+  }
+  function parar() {
+    corriendo = false;
+    clearInterval(timer);
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+  }
+
+  poner(0);
+
+  // el menú es navegable: al elegir una frase el reloj vuelve a empezar,
+  // para no cortarla a mitad de lectura
+  puntos.forEach(function (b, n) {
+    b.addEventListener('click', function () {
+      sec.classList.add('is-cambiando');
+      setTimeout(function () {
+        poner(n);
+        sec.classList.remove('is-cambiando');
+      }, 360);
+      if (corriendo) { clearInterval(timer); timer = setInterval(siguiente, ESPERA); }
+    });
+  });
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  // corre sola, pero sólo mientras la sección está a la vista
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (es) {
+      es[0].isIntersecting ? arrancar() : parar();
+    }, { rootMargin: '80px' }).observe(sec);
+  } else {
+    arrancar();
+  }
+  document.addEventListener('visibilitychange', () => document.hidden && parar());
+})();
+
+/* ---- la cabeza: puntos claros sobre negro, dentro de su rectángulo ---- */
+(function () {
+  const c = document.getElementById('probsCanvas');
+  if (!c) return;
+  createDotField(c, {
+    src: 'problemas-src.jpg',
+    // mismos valores que la sección del gato: el negro de fondo tiene que ser
+    // el mismo grano, no negro plano
+    paper: 10,
+    // En escritorio la cabeza cabe entera. En móvil el marco es vertical y
+    // 'contain' la dejaría en una franja delgada: allí encuadra recortando.
+    fit: () => (window.innerWidth <= 900 ? 'cover' : 'contain'),
+    zoomCap: 2.6,
+    // El recorte centrado deja la cabeza a la izquierda; la maqueta la trae
+    // corrida a la derecha y algo más arriba. El zoom sobra sólo para tener
+    // margen vertical que panear: con 'cover' puro el alto encaja justo.
+    zoom: () => (window.innerWidth <= 900 ? 1.15 : 1),
+    panX: () => (window.innerWidth <= 900 ? 0.138 : 0),
+    panY: () => (window.innerWidth <= 900 ? -0.06 : 0),
+    wGamma: 1.6,
+    pxPerDot: 9,
+    maxDots: 240000,
+    prepare: limpiarProblemas
+  });
+})();
+
+/* Limpieza de la referencia de "problemas": hay que quitarle el título, el
+   polígono blanco y la barra inferior para quedarse sólo con la cabeza.
+   Medidas en el espacio original de 2560x1452. */
+function limpiarProblemas(cx, w, h) {
+  const k = w / 2560;
+  const im = cx.getImageData(0, 0, w, h), d = im.data;
+  const at = (x, y) => ((y * w + x) << 2);
+  const lum = (x, y) => { const i = at(x, y); return d[i] * .299 + d[i + 1] * .587 + d[i + 2] * .114; };
+  const put = (x, y, v) => {
+    if (x < 0 || x >= w || y < 0 || y >= h) return;
+    const i = at(x, y), c = Math.max(0, Math.min(255, v));
+    d[i] = d[i + 1] = d[i + 2] = c;
+  };
+  const S = (v) => Math.round(v * k);
+
+  // el título está sobre negro puro: basta con apagarlo
+  for (let y = S(216); y < S(274); y++)
+    for (let x = S(678); x < S(1104); x++) put(x, y, Math.random() * 2);
+
+  // El polígono tapa parte de la cabeza. Se rellena por barrido: en cada fila
+  // se interpola entre el píxel sano de la izquierda y el de la derecha.
+  const POLI = [[1021, 645], [1430, 640], [1487, 725], [1145, 858], [1049, 795]].map(p => [S(p[0]), S(p[1])]);
+  const yTop = Math.min(...POLI.map(p => p[1])) - 2;
+  const yBot = Math.max(...POLI.map(p => p[1])) + 2;
+  for (let y = yTop; y <= yBot; y++) {
+    const xs = [];
+    for (let i = 0; i < POLI.length; i++) {
+      const a = POLI[i], b = POLI[(i + 1) % POLI.length];
+      if ((a[1] <= y && b[1] > y) || (b[1] <= y && a[1] > y))
+        xs.push(a[0] + (y - a[1]) / (b[1] - a[1]) * (b[0] - a[0]));
+    }
+    if (xs.length < 2) continue;
+    const x0 = Math.floor(Math.min(...xs)) - 3, x1 = Math.ceil(Math.max(...xs)) + 3;
+    const va = lum(Math.max(0, x0 - 6), y), vb = lum(Math.min(w - 1, x1 + 6), y);
+    for (let x = x0; x <= x1; x++) {
+      const t = (x - x0) / Math.max(1, x1 - x0);
+      put(x, y, va + (vb - va) * t + (Math.random() - .5) * 9);
+    }
+  }
+
+  // la barra inferior: interpolación vertical, así la columna brillante que
+  // la cruza no se corta
+  const bT = S(1143), bB = S(1197), bx0 = S(680), bx1 = S(1752);
+  for (let x = bx0; x < bx1; x++) {
+    const a = (lum(x, bT - 3) + lum(x, bT - 5)) / 2;
+    const b = (lum(x, Math.min(h - 1, bB + 3)) + lum(x, Math.min(h - 1, bB + 5))) / 2;
+    for (let y = bT; y <= bB; y++)
+      put(x, y, a + (b - a) * (y - bT) / (bB - bT) + (Math.random() - .5) * 9);
+  }
+
+  cx.putImageData(im, 0, 0);
+}
+
+/* ---- difuminado entre secciones ----
+   Una franja donde las dos texturas de puntos se entremezclan: la del fondo
+   que sale se va raleando mientras entra la del que llega, sobre una rampa
+   entre los dos papeles. Evita el corte seco de negro a claro. */
+function createDifuminado(canvas, opts) {
+  const o = Object.assign({
+    papelA: 10, tintaA: 120, densA: 0.10,   // el fondo de arriba
+    papelB: 243, tintaB: 205, densB: 0.03,  // el de abajo
+    extra: 0.30,      // cuánta densidad de más en el centro de la franja
+    maxScale: 1.25
+  }, opts || {});
+
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const LUT = 1024, MASK = LUT - 1;
+  const SIN = new Float32Array(LUT);
+  for (let i = 0; i < LUT; i++) SIN[i] = Math.sin((i / LUT) * Math.PI * 2);
+
+  let W = 0, H = 0, count = 0, raf = 0, corriendo = false, timer = 0;
+  let px, py, pv, ph, sp, amp, fondo32, buf32, imageData, lastIdx, lastN = 0;
+
+  const suave = (t) => t * t * (3 - 2 * t);
+  const mezcla = (a, b, t) => a + (b - a) * t;
+
+  function sembrar() {
+    // fondo: rampa entre los dos papeles
+    imageData = ctx.createImageData(W, H);
+    buf32 = new Uint32Array(imageData.data.buffer);
+    fondo32 = new Uint32Array(W * H);
+    for (let y = 0; y < H; y++) {
+      const v = Math.round(mezcla(o.papelA, o.papelB, suave(y / (H - 1)))) & 255;
+      const c = (0xff000000 | (v << 16) | (v << 8) | v) >>> 0;
+      for (let x = 0; x < W; x++) fondo32[y * W + x] = c;
+    }
+
+    // puntos: los de cada lado se ralean o entran según la altura
+    const est = [];
+    for (let y = 0; y < H; y++) {
+      const p = y / (H - 1), e = suave(p);
+      const d = mezcla(o.densA, o.densB, e) + o.extra * Math.sin(Math.PI * p);
+      est.push({ d: d, e: e });
+    }
+    let total = 0;
+    for (let y = 0; y < H; y++) total += est[y].d * W;
+    const cap = Math.ceil(total * 1.25);
+
+    px = new Int32Array(cap); py = new Int32Array(cap);
+    pv = new Uint8Array(cap); ph = new Uint16Array(cap);
+    sp = new Float32Array(cap); amp = new Float32Array(cap);
+
+    let c = 0;
+    for (let y = 0; y < H && c < cap; y++) {
+      const { d, e } = est[y];
+      for (let x = 0; x < W && c < cap; x++) {
+        if (Math.random() >= d) continue;
+        // el punto pertenece al lado que todavía manda a esa altura
+        const deA = Math.random() > e;
+        const tinta = deA ? o.tintaA : o.tintaB;
+        const base = mezcla(o.papelA, o.papelB, e);
+        px[c] = x; py[c] = y;
+        pv[c] = Math.max(0, Math.min(255, Math.round(mezcla(base, tinta, 0.65 + Math.random() * 0.35))));
+        ph[c] = Math.random() * LUT | 0;
+        sp[c] = (0.5 + Math.random() * 2) * 2.2;   // misma efervescencia que el resto
+        amp[c] = (0.1 + Math.random() * 0.22) * 2.2;
+        c++;
+      }
+    }
+    count = c;
+    lastIdx = new Int32Array(count);
+    lastN = 0;
+    buf32.set(fondo32);
+  }
+
+  function pintar(t) {
+    for (let i = 0; i < lastN; i++) buf32[lastIdx[i]] = fondo32[lastIdx[i]];
+    let ln = 0;
+    for (let i = 0; i < count; i++) {
+      const f = t === null ? 0 : SIN[(ph[i] + (t * sp[i] * LUT * 0.16 | 0)) & MASK];
+      const idx = py[i] * W + px[i];
+      const base = fondo32[idx] & 0xff;
+      let v = base + (pv[i] - base) * (1 + amp[i] * f);
+      if (v < 0) v = 0; else if (v > 255) v = 255;
+      const g = v | 0;
+      buf32[idx] = (0xff000000 | (g << 16) | (g << 8) | g) >>> 0;
+      lastIdx[ln++] = idx;
+    }
+    lastN = ln;
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  function cuadro(now) { pintar(now * 0.001); raf = requestAnimationFrame(cuadro); }
+  function start() { if (corriendo || reducido || !buf32) return; corriendo = true; raf = requestAnimationFrame(cuadro); }
+  function stop() { corriendo = false; if (raf) cancelAnimationFrame(raf); raf = 0; }
+
+  function medir() {
+    const r = canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, o.maxScale);
+    const w = Math.max(1, Math.round(r.width * dpr));
+    const h = Math.max(1, Math.round(r.height * dpr));
+    if (w === W && h === H) return;
+    W = w; H = h; canvas.width = W; canvas.height = H;
+    sembrar();
+    pintar(reducido ? null : 0);
+  }
+
+  medir();
+  window.addEventListener('resize', function () { clearTimeout(timer); timer = setTimeout(medir, 180); });
+  document.addEventListener('visibilitychange', function () { document.hidden ? stop() : start(); });
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (es) { es[0].isIntersecting ? start() : stop(); },
+      { rootMargin: '100px' }).observe(canvas);
+  } else start();
+
+  return { start: start, stop: stop };
+}
+
+(function () {
+  document.querySelectorAll('.difuminado canvas').forEach(function (c) {
+    const d = c.parentNode.dataset;
+    createDifuminado(c, {
+      papelA: +d.papelA, tintaA: +d.tintaA, densA: +d.densA,
+      papelB: +d.papelB, tintaB: +d.tintaB, densB: +d.densB
+    });
+  });
+})();

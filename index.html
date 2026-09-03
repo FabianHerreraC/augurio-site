@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Augurio</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="header" id="header">
+  <canvas class="header__canvas" id="dust" aria-hidden="true"></canvas>
+
+  <div class="header__inner">
+    <img class="header__logo" src="AuLogo.svg" alt="Augurio">
+
+    <p class="tagline">
+      <span class="sr-only">Conversaciones masivas, profundas, reveladoras, verdaderas, valiosas, completas.</span>
+      <span class="tagline__line" aria-hidden="true">
+        <span class="tagline__fixed">Conversaciones</span>
+        <span class="tagline__slot">
+          <span class="tagline__sizer" id="taglineSizer">reveladoras</span>
+          <span class="tagline__live">
+            <span id="taglineWord"></span><i class="tagline__caret" id="taglineCaret"></i>
+          </span>
+        </span>
+      </span>
+    </p>
+  </div>
+</header>
+
+<main class="main">
+
+  <!-- El bloque alto es sólo pista de scroll: lo que se ve queda fijo mientras
+       se recorre, para que haya recorrido suficiente sin que la escena se mueva -->
+  <section class="gato" id="gato">
+    <div class="gato__fijo">
+      <canvas class="gato__canvas" id="gatoCanvas" aria-hidden="true"></canvas>
+      <div class="gato__marco">
+        <svg class="gato__malla" id="gatoMalla" viewBox="0 0 2560 1696" preserveAspectRatio="none" aria-hidden="true">
+          <g fill="none" stroke="#fff" stroke-width="1" stroke-opacity="0.5" vector-effect="non-scaling-stroke">
+            <path data-e="2-4" style="--d:0.90s" d="M946 738 L654 850"/>
+            <path data-e="2-5" style="--d:0.97s" d="M999 753 L1254 1080"/>
+            <path data-e="1-3" style="--d:1.04s" d="M1074 344 L1486 505"/>
+            <path data-e="4-6" style="--d:1.11s" d="M632 894 L781 1359"/>
+            <path data-e="3-5" style="--d:1.18s" d="M1505 548 L1288 1076"/>
+            <path data-e="1-4" style="--d:1.25s" d="M1021 359 L643 835"/>
+            <path data-e="2-6" style="--d:1.32s" d="M969 759 L800 1358"/>
+            <path data-e="1-5" style="--d:1.39s" d="M1052 365 L1265 1074"/>
+            <path data-e="1-6" style="--d:1.46s" d="M1034 365 L799 1358"/>
+            <path data-e="3-6" style="--d:1.53s" d="M1496 543 L813 1365"/>
+          </g>
+        </svg>
+        <svg class="gato__traza" viewBox="0 0 2560 1696" preserveAspectRatio="none" aria-hidden="true">
+          <g fill="none" stroke="#fff" stroke-width="1.5" vector-effect="non-scaling-stroke">
+            <path data-s="0" d="M1037 366 L983 692"/>
+            <path data-s="1" d="M1010 714 L1486 529"/>
+            <path data-s="2" d="M1486 529 L654 850"/>
+            <path data-s="3" d="M654 874 L1243 1095"/>
+            <path data-s="4" d="M1246 1124 L820 1374"/>
+          </g>
+        </svg>
+        <span class="gato__num" data-n="1" style="--x:40.7%; --y:19.6%">1.</span>
+        <span class="gato__num" data-n="2" style="--x:38.2%; --y:42.8%">2.</span>
+        <span class="gato__num" data-n="3" style="--x:59.3%; --y:30.5%">3.</span>
+        <span class="gato__num" data-n="4" style="--x:24.3%; --y:50.8%">4.</span>
+        <span class="gato__num" data-n="5" style="--x:49.8%; --y:65.3%">5.</span>
+        <span class="gato__num" data-n="6" style="--x:30.9%; --y:82.0%">6.</span>
+
+      </div>
+
+      <p class="gato__rotulo" aria-hidden="true">COLECTIVO</p>
+      <div class="gato__tarjeta" id="gatoTarjeta">
+        <div class="gato__pila" id="gatoPila">
+          <p class="gato__frase" data-n="1"><b class="gato__clave">Profundidad_</b>Creemos que el valor de un equipo no está en lo que sabe cada persona por separado, sino en lo que sabe como colectivo.</p>
+          <p class="gato__frase" data-n="2"><b class="gato__clave">Revelación_</b>Creemos que ese conocimiento no se declara, se revela conversando.</p>
+          <p class="gato__frase" data-n="3"><b class="gato__clave">Granularidad_</b>Creemos que una buena conversación no es un promedio de opiniones, es la que también escucha a la voz disidente.</p>
+          <p class="gato__frase" data-n="4"><b class="gato__clave">Ambigüedad_</b>Creemos que una buena conversación no se queda en la superficie, va en profundidad.</p>
+          <p class="gato__frase" data-n="5"><b class="gato__clave">LLM_</b>Creemos que la IA por fin permite orquestar esas conversaciones a gran escala, sin perder lo que antes se quedaba en el aire cuando la sala era demasiado grande para escuchar a todos.</p>
+          <p class="gato__frase" data-n="6"><b class="gato__clave">Singularidad_</b>Creemos que ninguna compañía necesita parecerse a otra, solo necesita parecerse más a sí misma.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+
+  <!-- del negro del gato al papel de la mano -->
+  <div class="difuminado" data-papel-a="10" data-tinta-a="125" data-dens-a="0.1" data-papel-b="243" data-tinta-b="205" data-dens-b="0.03" aria-hidden="true"><canvas></canvas></div>
+  <!-- El bloque alto es pista de scroll; lo que se ve queda anclado mientras
+       se recorre, igual que en la sección del gato. -->
+  <!-- El bloque alto es pista de scroll; la escena queda anclada mientras
+       se recorre. Diagramación tomada de AuguriositeDesktop/Mobile. -->
+  <section class="quehace" id="quehace">
+    <div class="quehace__fijo">
+      <div class="quehace__marco">
+        <canvas class="quehace__canvas" id="mano" aria-hidden="true"></canvas>
+
+        <p class="quehace__seccion" aria-hidden="true">QUE</p>
+        <p class="quehace__rotulo" aria-hidden="true">COMO LO HACEMOS</p>
+
+        <div class="quehace__titular">
+          <p class="quehace__frase" id="quehaceFrase">
+              <span class="sr-only">Usamos tecnología para orquestar conversaciones profundas que revelan conocimiento.</span>
+              <span class="quehace__frase-slot" aria-hidden="true">
+                <span class="quehace__frase-sizer">Usamos tecnología para orquestar conversaciones profundas que revelan conocimiento.</span>
+                <span class="quehace__frase-live"><span id="quehaceFraseTexto"></span><i class="quehace__caret" id="quehaceCaret"></i></span>
+              </span>
+            </p>
+        </div>
+
+        <p class="quehace__indice" id="quehaceIndice" aria-hidden="true">01</p>
+
+        <div class="quehace__tarjeta">
+          <div class="hitos__panel" id="hitosPanel">
+            <p class="hito__desc" data-n="0"><b class="hito__clave">Conversación_</b>define las reglas del diálogo antes de construir nada: profundidad, contraste de ideas, ausencia de sesgo y capacidad de generar revelaciones reales, apoyada en cuestionamiento crítico y en imágenes o historias en vez de preguntas cerradas. Este diseño es el que luego le dicta al chatbot cómo comportarse.</p>
+            <p class="hito__desc" data-n="1"><b class="hito__clave">Captura_</b>es la implementación concreta de esas reglas: el chatbot que efectivamente conversa con las personas y guarda cada intercambio en Supabase, organizado por sesión. Su función es estrictamente recolectora; no interpreta ni analiza nada, solo asegura que la conversación quede registrada con fidelidad.</p>
+            <p class="hito__desc" data-n="2"><b class="hito__clave">Análisis_</b>toma esas conversaciones almacenadas y las procesa con IA para extraer insights estructurados: encuentra patrones, contrasta respuestas entre participantes y filtra ruido, hasta llegar a los hallazgos que explican qué es la organización, por qué es valiosa y en qué es distinta a otras.</p>
+            <p class="hito__desc" data-n="3"><b class="hito__clave">Visualización_</b>traduce esos insights en formatos gráficos predefinidos (nubes de puntos, grafos, mapas de calor, cronogramas, entre otros), usando specs ya probadas en proyectos anteriores en vez de generar cada vez un diseño desde cero. El resultado final es una sesión visual personalizada que la organización puede leer de un vistazo, cerrando el ciclo que empezó con una simple conversación de chat.</p>
+          </div>
+        </div>
+
+        <nav class="hitos" id="hitos" aria-label="Fases del proceso">
+            <button type="button" class="hito" data-n="0">Conversación</button>
+            <button type="button" class="hito" data-n="1">Captura</button>
+            <button type="button" class="hito" data-n="2">Análisis</button>
+            <button type="button" class="hito" data-n="3">Visualización</button>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+
+
+  <!-- del papel de la mano al negro de problemas -->
+  <div class="difuminado" data-papel-a="243" data-tinta-a="205" data-dens-a="0.03" data-papel-b="10" data-tinta-b="125" data-dens-b="0.1" aria-hidden="true"><canvas></canvas></div>
+  <!-- Sección "problemas": corre sola. Cada cambio de frase reparte el texto
+       entre el polígono y la barra inferior, y el polígono cambia de forma
+       conservando sus cinco lados. -->
+  <section class="probs" id="probs">
+    <div class="probs__marco">
+      <canvas class="probs__canvas" id="probsCanvas" aria-hidden="true"></canvas>
+
+      <p class="probs__rotulo">Dolores</p>
+
+      <div class="probs__cuadro" aria-hidden="true"></div>
+
+      <nav class="probs__menu" id="probsMenu" aria-label="Problemas">
+        <button type="button" class="probs__punto" data-n="1" aria-label="Problema 1"></button>
+        <button type="button" class="probs__punto" data-n="2" aria-label="Problema 2"></button>
+        <button type="button" class="probs__punto" data-n="3" aria-label="Problema 3"></button>
+        <button type="button" class="probs__punto" data-n="4" aria-label="Problema 4"></button>
+        <button type="button" class="probs__punto" data-n="5" aria-label="Problema 5"></button>
+        <button type="button" class="probs__punto" data-n="6" aria-label="Problema 6"></button>
+        <button type="button" class="probs__punto" data-n="7" aria-label="Problema 7"></button>
+        <button type="button" class="probs__punto" data-n="8" aria-label="Problema 8"></button>
+        <button type="button" class="probs__punto" data-n="9" aria-label="Problema 9"></button>
+        <button type="button" class="probs__punto" data-n="10" aria-label="Problema 10"></button>
+      </nav>
+
+      <p class="probs__titulo">Los problemas que resolvemos</p>
+
+      <svg class="probs__poli" viewBox="0 0 2560 1682" preserveAspectRatio="none" aria-hidden="true">
+        <polygon id="probsPoli" fill="#fff" points="1109,683 1477,678 1528,764 1220,898 1134,835"/>
+      </svg>
+
+      <p class="probs__arriba" id="probsArriba"></p>
+      <p class="probs__abajo"><span id="probsAbajo"></span></p>
+
+      <p class="sr-only" id="probsSR"></p>
+    </div>
+  </section>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
