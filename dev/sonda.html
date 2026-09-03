@@ -68,11 +68,19 @@ async function correr() {
   const seccion = (id) => d.getElementById(id);
 
   // ---- que los cuatro módulos hayan arrancado ----------------------------
+  // Mirar sólo el tamaño del lienzo no basta: con un resize adelantándose a la
+  // carga de la imagen, el lienzo queda dimensionado y en blanco. Hay que
+  // comprobar que de verdad se escribieron píxeles.
+  const lienzos = ['dust', 'gatoCanvas', 'mano', 'probsCanvas'].map((id) => {
+    const c = d.getElementById(id);
+    if (!c || !c.width || !c.height) return id + ':falta';
+    const px = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let opacos = 0;
+    for (let i = 3; i < px.length; i += 4000) if (px[i] > 0) opacos++;
+    return opacos > 0 ? null : id + ':en blanco';
+  }).filter(Boolean);
   comprobar('el campo de puntos pinta en las 4 secciones',
-    ['dust', 'gatoCanvas', 'mano', 'probsCanvas'].every((id) => {
-      const c = d.getElementById(id);
-      return c && c.width > 0 && c.height > 0;
-    }), 'canvas con tamaño > 0');
+    lienzos.length === 0, lienzos.join('  ') || 'los 4 con píxeles escritos');
 
   // ---- gato: coreografía de scroll ---------------------------------------
   const gato = seccion('gato');

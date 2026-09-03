@@ -208,9 +208,20 @@ function createDotField(canvas, opts) {
     const dpr = Math.min(window.devicePixelRatio || 1, o.maxScale);
     const w = Math.max(1, Math.round(rect.width * dpr));
     const h = Math.max(1, Math.round(rect.height * dpr));
-    if (w === W && h === H) return;
-    W = w; H = h;
-    canvas.width = W; canvas.height = H;
+    const mismasMedidas = (w === W && h === H);
+
+    // Salir por "no ha cambiado el tamaño" sólo vale si además ya hay campo
+    // sembrado. Si un 'resize' se adelanta a la carga de la imagen —cosa
+    // habitual cuando la fuente viaja por red y no por localhost—, deja el
+    // lienzo dimensionado y sin campo; al llegar el onload, resize() volvía
+    // a entrar, veía las mismas medidas y se iba sin sembrar nunca. El
+    // lienzo se quedaba en blanco para siempre y sin error en consola.
+    if (mismasMedidas && buf32) return;
+
+    if (!mismasMedidas) {
+      W = w; H = h;
+      canvas.width = W; canvas.height = H;
+    }
     if (!clean) return;
     buildField();
     paint(reduced ? null : 0);
