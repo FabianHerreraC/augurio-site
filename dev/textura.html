@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><title>textura</title>
+<body style="font:12px monospace;white-space:pre;background:#222;color:#eee"></body>
+<script>
+const nombres = ['textura-negro.jpg', 'textura-papel.jpg'];
+let listos = 0, R = {};
+nombres.forEach((n) => {
+  const im = new Image();
+  im.onload = () => {
+    const c = document.createElement('canvas');
+    c.width = im.width; c.height = im.height;
+    const x = c.getContext('2d'); x.drawImage(im, 0, 0);
+    R[n] = { w: im.width, h: im.height, d: x.getImageData(0,0,im.width,im.height).data };
+    if (++listos === nombres.length) { window.LISTO = true; document.body.textContent = 'listo'; }
+  };
+  im.src = '../' + n;
+});
+window.analizar = (n) => {
+  const { w, h, d } = R[n];
+  const L = (x,y) => d[(y*w+x)*4];
+  // varianza entre medias de bloques 8x8 frente a varianza dentro del bloque:
+  // el JPEG aplana el interior del bloque y deja escalones en los bordes
+  let medias = [], dentro = 0, nb = 0;
+  for (let by = 0; by < h; by += 8) for (let bx = 0; bx < w; bx += 8) {
+    let s = 0, s2 = 0, k = 0;
+    for (let y = by; y < by+8; y++) for (let x = bx; x < bx+8; x++) { const v = L(x,y); s += v; s2 += v*v; k++; }
+    const m = s/k; medias.push(m); dentro += (s2/k - m*m); nb++;
+  }
+  dentro /= nb;
+  const mm = medias.reduce((a,b)=>a+b,0)/medias.length;
+  const entre = medias.reduce((a,b)=>a+(b-mm)**2,0)/medias.length;
+  // salto medio al cruzar un borde de bloque (x múltiplo de 8) vs cruce interior
+  let borde = 0, nbo = 0, interior = 0, nin = 0;
+  for (let y = 0; y < h; y++) for (let x = 1; x < w; x++) {
+    const dif = Math.abs(L(x,y) - L(x-1,y));
+    if (x % 8 === 0) { borde += dif; nbo++; } else { interior += dif; nin++; }
+  }
+  return { entreBloques: +entre.toFixed(2), dentroBloques: +dentro.toFixed(2),
+    saltoBorde: +(borde/nbo).toFixed(2), saltoInterior: +(interior/nin).toFixed(2),
+    ratio: +((borde/nbo)/(interior/nin)).toFixed(3) };
+};
+</script>

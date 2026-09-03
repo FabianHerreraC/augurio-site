@@ -138,6 +138,16 @@ de fracción de píxel, truncar manda la mitad de los puntos al píxel anterior 
 el núcleo queda agujereado. Truncando, la mano llegaba al 64% de cobertura;
 redondeando, al 92%.
 
+### La baldosa del fondo se muestra a la mitad de su tamaño
+
+`textura-negro.jpg` y `textura-papel.jpg` miden 160 px, pero van con
+`background-size: 80px`. No es un descuido: en una pantalla DPR 2, mostrarlas
+a 160 px CSS las amplía al doble y cada píxel de ruido pasa a ser un bloque de
+2x2. A 80 px caen 1:1 y el grano vuelve a ser de un píxel.
+
+Donde más se nota es en la mano y en problemas en móvil, que es donde el
+lienzo no cubre el panel entero y la textura queda a la vista en bandas.
+
 ### Las texturas de fondo tienen que ser uniformes
 
 `textura-negro.jpg` y `textura-papel.jpg` se repiten cada 160 px. Una sola mota
@@ -154,7 +164,10 @@ Corte en `max-width: 900px`.
 - **gato**: escena ampliada 1.8× y corrida a la derecha (§3). `pxPerDot` baja de
   9 a 5: al triplicarse el área, la misma siembra adelgaza la figura.
 - **mano**: el lienzo pasa al flujo en vez de ser fondo a sangre, porque el
-  texto oscuro sobre la mano negra no se leía. Las patas se ocultan.
+  texto oscuro sobre la mano negra no se leía. Las patas se ocultan. Conserva
+  el anclaje: el contenido apilado mide unos 700 px y entra en el panel. Por
+  debajo de 700 px de alto de pantalla no cabe, y ahí se suelta el anclaje y
+  la sección se lee con scroll normal.
 - **problemas**: conserva la composición de la maqueta —cuadro, polígono, barra
   y menú— con el marco 984 × 1361. El polígono se lleva a su sitio con un
   `transform` sobre el SVG, para que la animación de morfeo siga trabajando en
@@ -178,6 +191,13 @@ la única forma de que `vw`, `svh` y las media queries resuelvan bien:
 Pulsa **Comprobar** y verifica la geometría de las cuatro secciones y que la
 coreografía del gato avance con el scroll. Correrla **a los dos anchos** después
 de cada cambio: casi todas las regresiones fueron de un ancho rompiendo el otro.
+
+### La sonda mide contra clientWidth, no contra innerWidth
+
+`innerWidth` incluye la barra de scroll; los porcentajes del CSS se calculan
+sobre `clientWidth`. Con un iframe de 390 y barra visible son 390 contra 375,
+y las comprobaciones de ancho fallan por esos 15 px sin que el sitio tenga
+nada malo.
 
 ### Al recortar las maquetas
 

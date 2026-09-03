@@ -64,7 +64,17 @@ async function correr() {
   const w = marco.contentWindow, d = w.document;
   await esperar(2000);
 
-  const movil = W <= 900;
+  // Medir contra el viewport real de dentro del iframe, no contra el parámetro
+  // de la URL: si aparece barra de scroll se come 15 px y todas las
+  // comprobaciones de ancho quedan desplazadas.
+  //
+  // Y clientWidth, no innerWidth: innerWidth incluye la barra, mientras que los
+  // porcentajes del CSS se calculan sobre clientWidth. Con 390 de iframe y
+  // barra visible son 390 contra 375, y la comprobación del marco del gato
+  // fallaba por esos 15 px.
+  const VW = d.documentElement.clientWidth;
+  const VH = d.documentElement.clientHeight;
+  const movil = VW <= 900;
   const seccion = (id) => d.getElementById(id);
 
   // ---- que los cuatro módulos hayan arrancado ----------------------------
@@ -111,7 +121,7 @@ async function correr() {
   // app.js. Si se desincronizan, los números dejan de caer sobre el gato.
   const gm = rect(d, '.gato__marco');
   comprobar('gato: marco y lienzo con el mismo encuadre',
-    movil ? Math.abs(gm.w - W * 1.8) < 6 : Math.abs(gm.w - Math.min(W, H * 2560 / 1696)) < 6,
+    movil ? Math.abs(gm.w - VW * 1.8) < 6 : Math.abs(gm.w - Math.min(VW, VH * 2560 / 1696)) < 6,
     `marco ${gm.w}px de ancho`);
 
   // La tarjeta crece con la frase que le toque. La 5 es la más larga y era la
@@ -121,7 +131,7 @@ async function correr() {
     w.scrollTo(0, Math.round(top0 + q * rec));
     await esperar(650);
     const r = d.getElementById('gatoTarjeta').getBoundingClientRect();
-    tarj.push({ n: tarj.length + 1, aire: Math.round(H - r.bottom), alto: Math.round(r.height) });
+    tarj.push({ n: tarj.length + 1, aire: Math.round(VH - r.bottom), alto: Math.round(r.height) });
   }
   const apretada = tarj.filter((c) => c.aire < 24);
   comprobar('gato: la tarjeta no toca el borde inferior en ninguna frase',
@@ -135,8 +145,8 @@ async function correr() {
   // escritorio cabe entero y abarca ~33%, que es lo que marca la maqueta. El
   // caso que hay que atrapar es el marco encogido, con los números apiñados.
   comprobar('gato: los números quedan repartidos, no apiñados',
-    ancho > W * (movil ? 0.5 : 0.25),
-    `abarcan ${Math.round(ancho)}px de ${W} (${Math.round(ancho / W * 100)}%)`);
+    ancho > VW * (movil ? 0.5 : 0.25),
+    `abarcan ${Math.round(ancho)}px de ${VW} (${Math.round(ancho / VW * 100)}%)`);
 
   // ---- problemas ---------------------------------------------------------
   const probs = seccion('probs');
@@ -147,7 +157,7 @@ async function correr() {
   comprobar('problemas: la barra va debajo del cuadro, sin solaparlo',
     barra.y >= cuadro.y + cuadro.h - 2, `cuadro acaba en ${cuadro.y + cuadro.h}, barra empieza en ${barra.y}`);
   comprobar('problemas: nada se sale del marco por los lados',
-    cuadro.x >= 0 && cuadro.x + cuadro.w <= W + 1, `cuadro ${cuadro.x}…${cuadro.x + cuadro.w} de ${W}`);
+    cuadro.x >= 0 && cuadro.x + cuadro.w <= VW + 1, `cuadro ${cuadro.x}…${cuadro.x + cuadro.w} de ${VW}`);
 
   // el polígono cubre el marco entero: sin pointer-events:none roba los clics
   const puntos = Array.from(d.querySelectorAll('.probs__punto'));
@@ -184,8 +194,8 @@ async function correr() {
 
   const titular = rect(d, '.quehace__titular');
   comprobar('mano: el titular no se sale de la pantalla',
-    titular.x >= -1 && titular.x + titular.w <= W + 1,
-    `${titular.x}…${titular.x + titular.w} de ${W}`);
+    titular.x >= -1 && titular.x + titular.w <= VW + 1,
+    `${titular.x}…${titular.x + titular.w} de ${VW}`);
 
   // un sizer sin su regla CSS dibuja el titular por duplicado
   const sizer = d.querySelector('.quehace__frase-sizer');
@@ -194,7 +204,7 @@ async function correr() {
 
   // ---- sin scroll horizontal en toda la página ---------------------------
   comprobar('la página no se desplaza en horizontal',
-    d.documentElement.scrollWidth <= W + 1,
+    d.documentElement.scrollWidth <= VW + 1,
     `${d.documentElement.scrollWidth}px de ancho`);
 
   // ---- pintar ------------------------------------------------------------

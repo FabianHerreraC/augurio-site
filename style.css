@@ -125,7 +125,11 @@ html, body {
   position: relative;
   height: 520svh;
   background: #eee url('textura-papel.jpg') repeat;
-  background-size: 160px 160px;
+  /* La baldosa mide 160 px reales. Mostrada a 160 px CSS, en una pantalla
+     DPR 2 se amplía al doble y cada píxel de ruido pasa a ser un bloque de
+     2x2: eso es lo que se veía pixelado. A 80 px cae 1:1 en pantallas de
+     doble densidad y el grano vuelve a ser de un píxel. */
+  background-size: 80px 80px;
 }
 
 .quehace__fijo {
@@ -336,7 +340,11 @@ html, body {
   position: relative;
   height: 680svh;   /* el tramo de más al final sostiene la malla en pantalla */
   background: #000 url('textura-negro.jpg') repeat;
-  background-size: 160px 160px;
+  /* La baldosa mide 160 px reales. Mostrada a 160 px CSS, en una pantalla
+     DPR 2 se amplía al doble y cada píxel de ruido pasa a ser un bloque de
+     2x2: eso es lo que se veía pixelado. A 80 px cae 1:1 en pantallas de
+     doble densidad y el grano vuelve a ser de un píxel. */
+  background-size: 80px 80px;
 }
 
 .gato__fijo {
@@ -512,7 +520,11 @@ html, body {
   position: relative;
   width: 100%;
   background: #000 url('textura-negro.jpg') repeat;
-  background-size: 160px 160px;
+  /* La baldosa mide 160 px reales. Mostrada a 160 px CSS, en una pantalla
+     DPR 2 se amplía al doble y cada píxel de ruido pasa a ser un bloque de
+     2x2: eso es lo que se veía pixelado. A 80 px cae 1:1 en pantallas de
+     doble densidad y el grano vuelve a ser de un píxel. */
+  background-size: 80px 80px;
 }
 
 /* El marco ocupa todo el ancho para que el grano del fondo llegue a los
@@ -706,15 +718,24 @@ html, body {
 @media (max-width: 900px) {
 
   /* ---- sección de la mano ----
-     Se suelta el anclaje: apilada no entra en una pantalla. La mano pasa a
-     su propia banda arriba y el texto baja a flujo, con cuerpo legible. */
-  .quehace { height: auto; }
+     La composición de escritorio no cabe en un móvil, así que el contenido se
+     apila: la mano en su propia banda y el texto en flujo, con cuerpo legible.
+     Pero el anclaje se mantiene, igual que en el gato: la sección se clava al
+     entrar y las cuatro fases pasan sin que la página se mueva.
+
+     El contenido apilado mide unos 700 px, así que entra en el panel. Por
+     debajo de 700 px de alto de pantalla ya no cabría, y ahí se suelta el
+     anclaje y la sección vuelve a leerse haciendo scroll (más abajo). */
+  .quehace { height: 340svh; }
 
   .quehace__fijo {
-    position: static;
-    height: auto;
-    display: block;
-    padding: 7vh 0;
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    overflow: hidden;
+    display: grid;
+    place-items: center;
+    padding: 0;
   }
 
   .quehace__marco {
@@ -723,7 +744,7 @@ html, body {
     max-height: none;
     display: flex;
     flex-direction: column;
-    gap: 3vh;
+    gap: 2.2vh;
     padding: 0 6vw;
   }
 
@@ -938,4 +959,19 @@ html, body {
 
   /* ---- franjas de difuminado ---- */
   .difuminado { height: 22svh; min-height: 120px; }
+}
+
+/* Pantallas bajas: en un móvil apaisado o en un teléfono pequeño el contenido
+   apilado de la mano no cabe en el panel, y anclarlo recortaría la tarjeta.
+   Ahí se suelta el anclaje y la sección se lee con scroll normal. */
+@media (max-width: 900px) and (max-height: 700px) {
+  .quehace { height: auto; }
+
+  .quehace__fijo {
+    position: static;
+    height: auto;
+    overflow: visible;
+    display: block;
+    padding: 6vh 0;
+  }
 }
