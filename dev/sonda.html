@@ -187,6 +187,36 @@ async function correr() {
   const mRec = mano.offsetHeight - w.innerHeight;
   w.scrollTo(0, Math.round(mTop + 0.5 * mRec));
   await esperar(800);
+  // La sección tiene que entrar ya en la primera fase, como en la maqueta.
+  w.scrollTo(0, Math.round(mTop + 0.12 * mRec));
+  await esperar(800);
+  comprobar('mano: entra en la primera píldora, Conversación',
+    Array.from(d.querySelectorAll('.hito')).findIndex((h) => h.classList.contains('is-activo')) === 0 &&
+    d.querySelector('.quehace__indice').textContent === '01',
+    'píldora activa e índice al entrar');
+
+  // La tarjeta crece con la fase. Con la mano de fondo todo va posicionado
+  // contra el panel, así que hay que comprobar que ninguna fase choca con el
+  // titular de arriba ni con las píldoras de abajo.
+  // Solapar en vertical no es chocar: en escritorio el titular y la tarjeta
+  // van en columnas distintas. Hay que cruzar los dos ejes.
+  const cruza = (a, b) => a.left < b.right && b.left < a.right &&
+                          a.top < b.bottom && b.top < a.bottom;
+  const choques = [];
+  for (let i = 0; i < 4; i++) {
+    w.scrollTo(0, Math.round(mTop + [0.12, 0.35, 0.58, 0.85][i] * mRec));
+    await esperar(750);
+    const ti = d.querySelector('.quehace__titular').getBoundingClientRect();
+    const ta = d.querySelector('.quehace__tarjeta').getBoundingClientRect();
+    const pi = d.querySelector('.hitos').getBoundingClientRect();
+    if (cruza(ta, ti)) choques.push(`fase ${i + 1}: pisa el titular`);
+    if (cruza(ta, pi)) choques.push(`fase ${i + 1}: pisa las píldoras`);
+  }
+  comprobar('mano: la tarjeta no choca con el titular ni con las píldoras',
+    choques.length === 0, choques.join('  ') || 'las cuatro fases con holgura');
+
+  w.scrollTo(0, Math.round(mTop + 0.5 * mRec));
+  await esperar(700);
   const tarjeta = d.querySelector('.quehace__tarjeta');
   comprobar('mano: la tarjeta y los hitos aparecen',
     tarjeta.classList.contains('is-in') &&

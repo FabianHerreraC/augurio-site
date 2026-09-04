@@ -738,83 +738,87 @@ html, body {
     padding: 0;
   }
 
+  /* El marco pasa a ser el panel entero: la mano va a sangre por detrás y
+     todo lo demás se coloca encima, en porcentajes del panel. Las medidas
+     salen de AuguriositeMobile.png, sección de 984 x 1249. */
   .quehace__marco {
     aspect-ratio: auto;
     width: 100%;
+    height: 100%;
     max-height: none;
-    display: flex;
-    flex-direction: column;
-    gap: 2.2vh;
-    padding: 0 6vw;
+    display: block;
+    padding: 0;
   }
 
+  /* la mano, de fondo, como el gato y la cabeza de problemas */
   .quehace__canvas {
-    position: relative;
-    inset: auto;
-    order: 2;
+    position: absolute;
+    inset: 0;
     width: 100%;
-    height: auto;
-    aspect-ratio: 2560 / 1741;
-    margin-top: -14vh;   /* la mano asoma por detrás del titular, como en el mockup */
+    height: 100%;
+    aspect-ratio: auto;
+    margin: 0;
   }
 
-  /* El titular se eleva para que la mano pase por detrás. Antes se hundía la
-     mano con z-index negativo, y eso la mandaba detrás del fondo de la
-     sección —que es opaco— - dejándola invisible. */
-  /* Con position:relative el `left: 20.3%` de escritorio deja de dimensionar
-     y pasa a desplazar: corría la caja un 20% hacia la derecha y la sacaba
-     del marco. En móvil hay que anular los desplazamientos. */
-  .quehace__titular {
-    position: relative;
-    inset: auto;
-    z-index: 1;
-  }
+  /* El texto va encima del cúmulo. Lo que lo hace legible no es esconder la
+     mano sino las cajas que ya trae el diseño: el titular sobre blanco al
+     62%, la tarjeta sobre blanco sólido y las píldoras al 72%. Igual que en
+     escritorio. */
+  .quehace__seccion,
+  .quehace__rotulo,
+  .quehace__titular,
+  .quehace__indice,
+  .quehace__tarjeta,
+  .hitos { position: absolute; z-index: 1; }
 
   .quehace__seccion {
-    position: static;
-    order: 0;
-    font-size: 10px;
+    left: 8%;
+    top: 4.4%;
+    font-size: max(8px, 2.6vw);
   }
 
   .quehace__rotulo {
-    position: absolute;
     left: auto;
-    right: 1.5vw;
-    top: 12vh;
-    font-size: 9px;
+    right: 5.5%;
+    top: 12.5%;
+    font-size: max(8px, 2.6vw);
   }
 
   .quehace__titular {
-    order: 1;
+    left: 4.2%;
+    right: 42.5%;
+    top: 8.2%;
     font-size: 27px;
     line-height: 1.22;
     padding: 0.5em 0.55em 0.7em;
   }
 
   .quehace__indice {
-    position: static;
-    order: 3;
+    left: 8%;
+    right: auto;
+    top: 62%;
     font-size: 11px;
   }
 
   .quehace__tarjeta {
-    position: static;
-    order: 4;
-    font-size: 14px;
-    padding: 1.2em 1.3em;
+    left: 25.8%;
+    right: 7.6%;
+    top: 50%;
+    font-size: 13px;
+    padding: 1.1em 1.2em;
   }
 
   .hito__clave { margin-right: 1.4em; font-size: 0.78em; }
 
   .hitos {
-    position: static;
-    order: 5;
-    left: auto; right: auto; top: auto;
+    left: 8.4%;
+    right: 8.3%;
+    top: 88%;
     justify-content: space-between;
     gap: 1.5vw;
   }
 
-  .hito { font-size: 11px; padding: 0.5em 0.9em; }
+  .hito { font-size: 10px; padding: 0.45em 0.7em; }
 
   /* ---- sección del gato ----
      Mantiene el anclaje: su coreografía es el sentido de la sección. La
@@ -961,17 +965,24 @@ html, body {
   .difuminado { height: 22svh; min-height: 120px; }
 }
 
-/* Pantallas bajas: en un móvil apaisado o en un teléfono pequeño el contenido
-   apilado de la mano no cabe en el panel, y anclarlo recortaría la tarjeta.
-   Ahí se suelta el anclaje y la sección se lee con scroll normal. */
-@media (max-width: 900px) and (max-height: 700px) {
-  .quehace { height: auto; }
+/* Pantallas bajas (un teléfono pequeño, o cualquiera en apaisado). La
+   composición no cambia —la mano sigue de fondo y el anclaje se mantiene—,
+   pero entre el titular y las píldoras se queda corto el hueco para la fase
+   más larga, así que se aprieta la tipografía y se sube la tarjeta.
 
-  .quehace__fijo {
-    position: static;
-    height: auto;
-    overflow: visible;
-    display: block;
-    padding: 6vh 0;
+   El respaldo anterior soltaba el anclaje y devolvía el contenido al flujo.
+   Ya no sirve: con la mano de fondo los elementos van posicionados de forma
+   absoluta contra el panel, y un panel de alto automático los deja a todos
+   apilados en la misma coordenada. */
+@media (max-width: 900px) and (max-height: 700px) {
+  .quehace__titular { font-size: 22px; }
+
+  .quehace__tarjeta {
+    top: 43%;
+    font-size: 11px;
+    padding: 0.9em 1em;
   }
+
+  .hitos { top: 90%; }
+  .hito { font-size: 9px; padding: 0.4em 0.6em; }
 }

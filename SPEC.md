@@ -35,9 +35,12 @@ El progreso es `q = -rect.top / (offsetHeight - innerHeight)`, de 0 a 1.
 
 | Sección | Pista | Umbrales |
 |---|---|---|
-| mano | 520svh | frase 0.02; hitos 0.22 / 0.40 / 0.58 / 0.76 |
+| mano | 520svh (340svh en móvil) | frase 0.02; hitos 0.06 / 0.31 / 0.54 / 0.77 |
 | gato | 680svh (560svh en móvil) | frases 0.08 / 0.21 / 0.33 / 0.45 / 0.57 / 0.70 |
 | problemas | automática, no por scroll | 6200 ms por frase, 900 ms de morfeo |
+
+El primer hito de la mano entra en 0.06, casi con la sección: la maqueta la
+muestra ya con «Conversación» activa y el índice en 01.
 
 El último umbral del gato es 0.70 a propósito: el tramo que sobra mantiene la
 malla final en pantalla el tiempo suficiente para mirarla.
@@ -77,7 +80,7 @@ pantalla sin duplicar la instancia.
 | Sección | Fuente | Encuadre |
 |---|---|---|
 | header | `headerA.png` | cover, `zoomCap` 1.35 |
-| mano | `mano-src.jpg` | sobre papel (`dark: true`), `scatter` 3.6, `pxPerDot` 6 |
+| mano | `mano-src.jpg` | sobre papel (`dark: true`), `scatter` 3.6, `pxPerDot` 6; en móvil `zoomCap` 3.4 + `zoom` 0.8, `panX` −0.02, `panY` 0.05 |
 | gato | `gato-src.jpg` | contain; en móvil `zoom` 1.8 y `panX` 0.159 |
 | problemas | `problemas-src.jpg` | contain; en móvil cover + `zoom` 1.15, `panX` 0.138, `panY` −0.06 |
 
@@ -163,11 +166,12 @@ Corte en `max-width: 900px`.
 
 - **gato**: escena ampliada 1.8× y corrida a la derecha (§3). `pxPerDot` baja de
   9 a 5: al triplicarse el área, la misma siembra adelgaza la figura.
-- **mano**: el lienzo pasa al flujo en vez de ser fondo a sangre, porque el
-  texto oscuro sobre la mano negra no se leía. Las patas se ocultan. Conserva
-  el anclaje: el contenido apilado mide unos 700 px y entra en el panel. Por
-  debajo de 700 px de alto de pantalla no cabe, y ahí se suelta el anclaje y
-  la sección se lee con scroll normal.
+- **mano**: la mano va de fondo a sangre, como el gato y problemas, y todo lo
+  demás se coloca encima en porcentajes del panel. Lo que hace legible el texto
+  no es esconder la mano sino las cajas del propio diseño: el titular sobre
+  blanco al 62%, la tarjeta sobre blanco sólido y las píldoras al 72%. Conserva
+  el anclaje. Por debajo de 700 px de alto la composición no cambia, sólo se
+  aprieta la tipografía y sube la tarjeta.
 - **problemas**: conserva la composición de la maqueta —cuadro, polígono, barra
   y menú— con el marco 984 × 1361. El polígono se lleva a su sitio con un
   `transform` sobre el SVG, para que la animación de morfeo siga trabajando en
@@ -191,6 +195,12 @@ la única forma de que `vw`, `svh` y las media queries resuelvan bien:
 Pulsa **Comprobar** y verifica la geometría de las cuatro secciones y que la
 coreografía del gato avance con el scroll. Correrla **a los dos anchos** después
 de cada cambio: casi todas las regresiones fueron de un ancho rompiendo el otro.
+
+### En la mano, solapar en vertical no es chocar
+
+En escritorio el titular y la tarjeta van en columnas distintas y se solapan en
+vertical sin tocarse. Cualquier comprobación de colisión tiene que cruzar los
+dos ejes; mirando sólo el vertical da un falso positivo de 90 px.
 
 ### La sonda mide contra clientWidth, no contra innerWidth
 

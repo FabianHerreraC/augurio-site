@@ -69,7 +69,7 @@ function createDotField(canvas, opts) {
     // fit puede ser una función: la sección de problemas encuadra distinto en
     // móvil, donde el marco es mucho más alto que ancho.
     const modo = val(o.fit);
-    let s = modo === 'contain' ? contain : Math.min(cover, contain * o.zoomCap);
+    let s = modo === 'contain' ? contain : Math.min(cover, contain * val(o.zoomCap));
     // zoom y paneo van encima del encuadre: la escena del gato se amplía y se
     // corre en móvil, y los números tienen que seguirla. Son fracciones del
     // lienzo, así que no dependen de la resolución.
@@ -279,6 +279,14 @@ function createDotField(canvas, opts) {
     gamma: 0.75,
     wGamma: 1.75,
     maxScale: 1,
+    // En escritorio la mano cabe en su marco, que ya tiene su proporción. En
+    // móvil el lienzo es el panel entero, mucho más alto que ancho: sin subir
+    // el tope de acercamiento, 'cover' se queda corto y la mano cae en una
+    // franja en vez de llenar la pantalla como en la maqueta.
+    zoomCap: () => (window.innerWidth <= 900 ? 3.4 : 1.35),
+    zoom: () => (window.innerWidth <= 900 ? 0.8 : 1),
+    panX: () => (window.innerWidth <= 900 ? -0.02 : 0),
+    panY: () => (window.innerWidth <= 900 ? 0.05 : 0),
     pxPerDot: 6,
     maxDots: 320000,
     drift: 0.9,
@@ -399,7 +407,10 @@ function createDotField(canvas, opts) {
   // avance: frase, las dos guías de la izquierda, las dos de la derecha,
   // y después las cuatro fases
   const EN_FRASE = 0.02;
-  const EN_HITO = [0.22, 0.40, 0.58, 0.76];
+  // La sección arranca ya en la primera fase: la maqueta la muestra con
+  // "Conversacion" activa y el índice en 01 nada más entrar. Las otras tres
+  // se reparten el resto del recorrido.
+  const EN_HITO = [0.06, 0.31, 0.54, 0.77];
 
   let puestaFrase = null, hitoActual = -2;
 
