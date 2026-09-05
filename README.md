@@ -22,6 +22,7 @@ Correr la sonda **a los dos anchos**:
 ```
 http://127.0.0.1:8232/dev/sonda.html?w=390&h=844
 http://127.0.0.1:8232/dev/sonda.html?w=1440&h=900
+http://127.0.0.1:8232/dev/sonda.html?w=390&h=844&lang=en
 ```
 
 Monta el sitio en un iframe del tamaño exacto del dispositivo y comprueba la

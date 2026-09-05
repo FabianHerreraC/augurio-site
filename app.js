@@ -1,3 +1,113 @@
+/* ================= idiomas =================
+   Todo el texto visible vive aquí, en los dos idiomas. Los módulos leen del
+   diccionario en el momento de pintar —no capturan las cadenas al arrancar—,
+   así que cambiar de idioma sólo exige volver a pintar. El texto que está en
+   el HTML lo reescribe aplicarIdioma(). */
+const TEXTOS = {
+  es: {
+    tagline: {
+      fijo: 'Conversaciones',
+      largo: 'reveladoras',   // reserva el ancho de la palabra más larga
+      palabras: ['masivas', 'profundas', 'reveladoras', 'verdaderas', 'valiosas', 'completas'],
+      sr: 'Conversaciones masivas, profundas, reveladoras, verdaderas, valiosas, completas.'
+    },
+    gato: {
+      rotulos: ['COLECTIVO', 'EMERGENTE', 'DISPERSIÓN', 'COMPLEJIDAD', 'TECNOLOGÍA', 'ÚNICO'],
+      frases: [
+        ['Profundidad_', 'Creemos que el valor de un equipo no está en lo que sabe cada persona por separado, sino en lo que sabe como colectivo.'],
+        ['Revelación_', 'Creemos que ese conocimiento no se declara, se revela conversando.'],
+        ['Granularidad_', 'Creemos que una buena conversación no es un promedio de opiniones, es la que también escucha a la voz disidente.'],
+        ['Ambigüedad_', 'Creemos que una buena conversación no se queda en la superficie, va en profundidad.'],
+        ['LLM_', 'Creemos que la IA por fin permite orquestar esas conversaciones a gran escala, sin perder lo que antes se quedaba en el aire cuando la sala era demasiado grande para escuchar a todos.'],
+        ['Singularidad_', 'Creemos que ninguna compañía necesita parecerse a otra, solo necesita parecerse más a sí misma.']
+      ]
+    },
+    mano: {
+      seccion: 'QUE',
+      rotulo: 'COMO LO HACEMOS',
+      titular: 'Usamos tecnología para orquestar conversaciones profundas que revelan conocimiento.',
+      pildoras: ['Conversación', 'Captura', 'Análisis', 'Visualización'],
+      fases: [
+        ['Conversación_', 'define las reglas del diálogo antes de construir nada: profundidad, contraste de ideas, ausencia de sesgo y capacidad de generar revelaciones reales, apoyada en cuestionamiento crítico y en imágenes o historias en vez de preguntas cerradas. Este diseño es el que luego le dicta al chatbot cómo comportarse.'],
+        ['Captura_', 'es la implementación concreta de esas reglas: el chatbot que efectivamente conversa con las personas y guarda cada intercambio en Supabase, organizado por sesión. Su función es estrictamente recolectora; no interpreta ni analiza nada, solo asegura que la conversación quede registrada con fidelidad.'],
+        ['Análisis_', 'toma esas conversaciones almacenadas y las procesa con IA para extraer insights estructurados: encuentra patrones, contrasta respuestas entre participantes y filtra ruido, hasta llegar a los hallazgos que explican qué es la organización, por qué es valiosa y en qué es distinta a otras.'],
+        ['Visualización_', 'traduce esos insights en formatos gráficos predefinidos (nubes de puntos, grafos, mapas de calor, cronogramas, entre otros), usando specs ya probadas en proyectos anteriores en vez de generar cada vez un diseño desde cero. El resultado final es una sesión visual personalizada que la organización puede leer de un vistazo, cerrando el ciclo que empezó con una simple conversación de chat.']
+      ]
+    },
+    probs: {
+      rotulo: 'Dolores',
+      titulo: 'Los problemas que resolvemos',
+      partes: [
+        ['Gerentes desconectados de la realidad de su empresa,', 'que dirigen desde el diagnóstico de hace dos años porque nadie les trajo uno más reciente.'],
+        ['Comunidades reducidas a encuestas y formularios,', 'cuya voz real nunca llegó a ningún reporte porque una casilla no tiene espacio para matices.'],
+        ['Equipos que viven en silos de conocimiento', 'y jamás han tenido la oportunidad de conversar con sus pares, aunque trabajen a diez metros de distancia.'],
+        ['Conflictos que solo revelan la falta de una imagen completa', 'sobre el problema que los originó, y que se resuelven solos en cuanto esa imagen aparece.'],
+        ['Juntas directivas que deciden sobre un consenso fabricado,', 'donde nadie se atrevió a decir en la sala lo que sí dijo en el pasillo.'],
+        ['Procesos de planeación estratégica', 'que terminan pareciéndose al competidor de moda, en vez de parecerse a la organización que los escribió.'],
+        ['Fusiones y alianzas que fracasan', 'porque nunca hubo una conversación real entre las culturas que se estaban uniendo, solo un comunicado de prensa.'],
+        ['Líderes que heredan un cargo', 'sin heredar el conocimiento tácito que solo vivía en la cabeza de quien se fue.'],
+        ['Organizaciones que confunden el ruido', 'de la voz más poderosa en la sala con la inteligencia colectiva de todo el equipo.'],
+        ['Equipos que llevan años repitiendo el mismo plan', 'porque nadie sostuvo la incomodidad de nombrar en voz alta lo que ya no estaba funcionando.']
+      ]
+    },
+    boton: 'EN',
+    botonTitulo: 'Switch to English'
+  },
+
+  en: {
+    tagline: {
+      fijo: 'Conversations that are',
+      largo: 'revealing',
+      palabras: ['massive', 'deep', 'revealing', 'honest', 'valuable', 'complete'],
+      sr: 'Conversations that are massive, deep, revealing, honest, valuable, complete.'
+    },
+    gato: {
+      rotulos: ['COLLECTIVE', 'EMERGENT', 'DISPERSION', 'COMPLEXITY', 'TECHNOLOGY', 'SINGULAR'],
+      frases: [
+        ['Depth_', 'We believe the value of a team is not in what each person knows separately, but in what it knows as a collective.'],
+        ['Revelation_', 'We believe that knowledge is not declared, it is revealed through conversation.'],
+        ['Granularity_', 'We believe a good conversation is not an average of opinions, it is the one that also listens to the dissenting voice.'],
+        ['Ambiguity_', 'We believe a good conversation does not stay on the surface, it goes deep.'],
+        ['LLM_', 'We believe AI finally makes it possible to orchestrate those conversations at scale, without losing what used to vanish into the air when the room was too big to hear everyone.'],
+        ['Singularity_', 'We believe no company needs to resemble another, it only needs to resemble itself more.']
+      ]
+    },
+    mano: {
+      seccion: 'WHAT',
+      rotulo: 'HOW WE DO IT',
+      titular: 'We use technology to orchestrate deep conversations that reveal knowledge.',
+      pildoras: ['Conversation', 'Capture', 'Analysis', 'Visualization'],
+      fases: [
+        ['Conversation_', 'sets the rules of the dialogue before anything is built: depth, contrast of ideas, absence of bias and the capacity to produce real revelations, grounded in critical questioning and in images or stories rather than closed questions. That design is what later tells the chatbot how to behave.'],
+        ['Capture_', 'is the concrete implementation of those rules: the chatbot that actually converses with people and stores every exchange in Supabase, organized by session. Its role is strictly to collect; it interprets and analyzes nothing, it only makes sure the conversation is recorded faithfully.'],
+        ['Analysis_', 'takes those stored conversations and processes them with AI to extract structured insights: it finds patterns, contrasts answers across participants and filters out noise, until it reaches the findings that explain what the organization is, why it is valuable and how it differs from others.'],
+        ['Visualization_', 'translates those insights into predefined graphic formats (dot clouds, graphs, heat maps, timelines, among others), using specs already proven in earlier projects instead of designing from scratch every time. The final result is a tailored visual session the organization can read at a glance, closing the loop that began with a simple chat conversation.']
+      ]
+    },
+    probs: {
+      rotulo: 'Pains',
+      titulo: 'The problems we solve',
+      partes: [
+        ['Managers disconnected from the reality of their company,', 'steering from a diagnosis made two years ago because nobody brought them a fresher one.'],
+        ['Communities reduced to surveys and forms,', 'whose real voice never reached any report because a checkbox has no room for nuance.'],
+        ['Teams living in silos of knowledge', 'who have never had the chance to talk with their peers, even when they work ten metres apart.'],
+        ['Conflicts that only reveal the lack of a complete picture', 'of the problem behind them, and that resolve themselves the moment that picture appears.'],
+        ['Boards that decide on a manufactured consensus,', 'where nobody dared say in the room what they did say in the hallway.'],
+        ['Strategic planning processes', 'that end up resembling the competitor of the moment, instead of the organization that wrote them.'],
+        ['Mergers and alliances that fail', 'because there was never a real conversation between the cultures being joined, only a press release.'],
+        ['Leaders who inherit a role', 'without inheriting the tacit knowledge that lived only in the head of whoever left.'],
+        ['Organizations that mistake the noise', 'of the most powerful voice in the room for the collective intelligence of the whole team.'],
+        ['Teams that have spent years repeating the same plan', 'because nobody held the discomfort of naming out loud what had stopped working.']
+      ]
+    },
+    boton: 'ES',
+    botonTitulo: 'Cambiar a español'
+  }
+};
+
+let IDIOMA = 'es';
+const T = () => TEXTOS[IDIOMA];
+
 /* Motor de campo de puntos.
    Toma una imagen, la lee como mapa de densidad y la reconstruye como un
    enjambre de puntos que titilan y derivan levemente. Sirve para tinta clara
@@ -302,21 +412,28 @@ function createDotField(canvas, opts) {
   const slot = word && word.closest('.tagline__slot');
   if (!word || !slot) return;
 
-  const WORDS = ['masivas', 'profundas', 'reveladoras', 'verdaderas', 'valiosas', 'completas'];
+  const WORDS = () => T().tagline.palabras;
   const TYPE_MS = [55, 95], DEL_MS = [30, 46], HOLD_MS = 1700, GAP_MS = 260;
 
-  // el hueco reserva el ancho de la palabra más ancha: la línea no se mueve
-  slot.querySelectorAll('.tagline__sizer').forEach((n) => n.remove());
-  WORDS.forEach(function (w) {
-    const s = document.createElement('span');
-    s.className = 'tagline__sizer';
-    s.setAttribute('aria-hidden', 'true');
-    s.textContent = w;
-    slot.insertBefore(s, slot.firstChild);
-  });
+  // El hueco reserva el ancho de la palabra más ancha para que la línea no se
+  // mueva al escribir. Hay que rehacerlo al cambiar de idioma: las palabras
+  // inglesas no miden lo mismo.
+  function sembrarMedidores() {
+    slot.querySelectorAll('.tagline__sizer').forEach((n) => n.remove());
+    WORDS().forEach(function (w) {
+      const s = document.createElement('span');
+      s.className = 'tagline__sizer';
+      s.setAttribute('aria-hidden', 'true');
+      s.textContent = w;
+      slot.insertBefore(s, slot.firstChild);
+    });
+  }
+  sembrarMedidores();
+  document.addEventListener('augurio:idioma', sembrarMedidores);
 
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    word.textContent = WORDS[0];
+    word.textContent = WORDS()[0];
+    document.addEventListener('augurio:idioma', () => { word.textContent = WORDS()[0]; });
     return;
   }
 
@@ -333,7 +450,7 @@ function createDotField(canvas, opts) {
   (async function run() {
     let i = 0;
     for (;;) {
-      const w = WORDS[i];
+      const w = WORDS()[i];
       idle(false);
       for (let c = 1; c <= w.length; c++) { word.textContent = w.slice(0, c); await sleep(rand(TYPE_MS)); }
       idle(true);
@@ -343,7 +460,7 @@ function createDotField(canvas, opts) {
       for (let c = w.length - 1; c >= 0; c--) { word.textContent = w.slice(0, c); await sleep(rand(DEL_MS)); }
       idle(true);
       await sleep(GAP_MS);
-      i = (i + 1) % WORDS.length;
+      i = (i + 1) % WORDS().length;
     }
   })();
 })();
@@ -366,12 +483,14 @@ function createDotField(canvas, opts) {
 
   const fraseTexto = document.getElementById('quehaceFraseTexto');
   const fraseCaret = document.getElementById('quehaceCaret');
-  const LETRAS = sec.querySelector('.quehace__frase-sizer').textContent;
+  // Se teclea leyendo el medidor, que es quien lleva el texto completo. Se
+  // relee en cada tecleo para que el cambio de idioma entre solo.
+  const LETRAS = () => sec.querySelector('.quehace__frase-sizer').textContent;
 
   const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (reducido) {
     frase.classList.add('is-in');
-    if (fraseTexto) fraseTexto.textContent = LETRAS;
+    if (fraseTexto) fraseTexto.textContent = LETRAS();
     if (tarjeta) tarjeta.classList.add('is-in');
     barra && barra.classList.add('is-in');
     hitos.forEach((h) => h.classList.add('is-activo'));
@@ -393,8 +512,9 @@ function createDotField(canvas, opts) {
     let i = 0;
     (function paso() {
       if (mio !== token) return;
-      fraseTexto.textContent = LETRAS.slice(0, ++i);
-      if (i < LETRAS.length) { setTimeout(paso, 20 + Math.random() * 26); return; }
+      const txt = LETRAS();
+      fraseTexto.textContent = txt.slice(0, ++i);
+      if (i < txt.length) { setTimeout(paso, 20 + Math.random() * 26); return; }
       if (!fraseCaret) return;
       fraseCaret.classList.add('is-idle');
       setTimeout(function () {
@@ -474,6 +594,9 @@ function createDotField(canvas, opts) {
 
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', function () { onScroll(); altoPanel(); });
+  document.addEventListener('augurio:idioma', function () {
+    hitoActual = -2; puestaFrase = null; onScroll();
+  });
   medir();
 })();
 
@@ -559,7 +682,7 @@ function limpiarGato(cx, w, h) {
   const frases = Array.from(sec.querySelectorAll('.gato__frase'));
   const rotulo = sec.querySelector('.gato__rotulo');
   // el rótulo girado cambia con cada frase, igual que la clave del párrafo
-  const ROTULOS = ['COLECTIVO', 'EMERGENTE', 'DISPERSIÓN', 'COMPLEJIDAD', 'TECNOLOGÍA', 'ÚNICO'];
+  const ROTULOS = () => T().gato.rotulos;
   const segs = Array.from(sec.querySelectorAll('.gato__traza path'));
   const malla = document.getElementById('gatoMalla');
   const aristas = malla ? Array.from(malla.querySelectorAll('path')) : [];
@@ -611,7 +734,7 @@ function limpiarGato(cx, w, h) {
     if (act !== activa) {
       activa = act;
       frases.forEach((f, i) => f.classList.toggle('is-in', i === act));
-      if (rotulo) rotulo.textContent = ROTULOS[Math.max(0, act)];
+      if (rotulo) rotulo.textContent = ROTULOS()[Math.max(0, act)];
       // los números ya recorridos quedan encendidos: el trazo que los une
       // se mantiene, sería incoherente que ellos se apagaran
       nums.forEach((n, i) => n.classList.toggle('is-dicho', i <= act));
@@ -638,53 +761,17 @@ function limpiarGato(cx, w, h) {
   }
   window.addEventListener('scroll', onScroll, { passive: true });
   window.addEventListener('resize', function () { onScroll(); ajustarAlto(); });
+  // medir() sólo actúa cuando cambia la frase activa; al cambiar de idioma no
+  // cambia, así que se invalida para que repinte rótulo y tarjeta.
+  document.addEventListener('augurio:idioma', function () {
+    activa = -2; medir(); ajustarAlto();
+  });
   medir();
 })();
 
 /* ---- sección "problemas" ---- */
 (function () {
-  const PARTES = [
-    [
-      "Gerentes desconectados de la realidad de su empresa,",
-      "que dirigen desde el diagnóstico de hace dos años porque nadie les trajo uno más reciente."
-    ],
-    [
-      "Comunidades reducidas a encuestas y formularios,",
-      "cuya voz real nunca llegó a ningún reporte porque una casilla no tiene espacio para matices."
-    ],
-    [
-      "Equipos que viven en silos de conocimiento",
-      "y jamás han tenido la oportunidad de conversar con sus pares, aunque trabajen a diez metros de distancia."
-    ],
-    [
-      "Conflictos que solo revelan la falta de una imagen completa",
-      "sobre el problema que los originó, y que se resuelven solos en cuanto esa imagen aparece."
-    ],
-    [
-      "Juntas directivas que deciden sobre un consenso fabricado,",
-      "donde nadie se atrevió a decir en la sala lo que sí dijo en el pasillo."
-    ],
-    [
-      "Procesos de planeación estratégica",
-      "que terminan pareciéndose al competidor de moda, en vez de parecerse a la organización que los escribió."
-    ],
-    [
-      "Fusiones y alianzas que fracasan",
-      "porque nunca hubo una conversación real entre las culturas que se estaban uniendo, solo un comunicado de prensa."
-    ],
-    [
-      "Líderes que heredan un cargo",
-      "sin heredar el conocimiento tácito que solo vivía en la cabeza de quien se fue."
-    ],
-    [
-      "Organizaciones que confunden el ruido",
-      "de la voz más poderosa en la sala con la inteligencia colectiva de todo el equipo."
-    ],
-    [
-      "Equipos que llevan años repitiendo el mismo plan",
-      "porque nadie sostuvo la incomodidad de nombrar en voz alta lo que ya no estaba funcionando."
-    ]
-  ];
+  const PARTES = () => T().probs.partes;
 
   const sec = document.getElementById('probs');
   const poli = document.getElementById('probsPoli');
@@ -737,10 +824,11 @@ function limpiarGato(cx, w, h) {
   }
 
   function poner(n) {
-    i = ((n % PARTES.length) + PARTES.length) % PARTES.length;
-    arriba.textContent = PARTES[i][0];
-    abajo.textContent = PARTES[i][1];
-    if (sr) sr.textContent = PARTES[i][0] + ' ' + PARTES[i][1];
+    const lista = PARTES();
+    i = ((n % lista.length) + lista.length) % lista.length;
+    arriba.textContent = lista[i][0];
+    abajo.textContent = lista[i][1];
+    if (sr) sr.textContent = lista[i][0] + ' ' + lista[i][1];
     puntos.forEach(function (b, n) {
       b.classList.toggle('is-activo', n === i);
       b.setAttribute('aria-current', n === i ? 'true' : 'false');
@@ -796,6 +884,7 @@ function limpiarGato(cx, w, h) {
     arrancar();
   }
   document.addEventListener('visibilitychange', () => document.hidden && parar());
+  document.addEventListener('augurio:idioma', () => poner(i));
 })();
 
 /* ---- la cabeza: puntos claros sobre negro, dentro de su rectángulo ---- */
@@ -1003,4 +1092,68 @@ function createDifuminado(canvas, opts) {
       papelB: +d.papelB, tintaB: +d.tintaB, densB: +d.densB
     });
   });
+})();
+
+/* ---- interruptor de idioma ----
+   El texto que vive en el HTML se reescribe aquí; el que vive en arrays lo
+   leen los módulos del diccionario en cada repintado. Al terminar se emite
+   'augurio:idioma' para que cada módulo vuelva a pintar lo suyo. */
+(function () {
+  const boton = document.getElementById('idioma');
+  if (!boton) return;
+
+  const poner = (sel, txt) => { const e = document.querySelector(sel); if (e) e.textContent = txt; };
+
+  // <b class="clave">Clave_</b>resto del párrafo
+  function ponerConClave(nodos, pares, claseClave) {
+    nodos.forEach(function (n, i) {
+      if (!pares[i]) return;
+      n.innerHTML = '';
+      const b = document.createElement('b');
+      b.className = claseClave;
+      b.textContent = pares[i][0];
+      n.appendChild(b);
+      n.appendChild(document.createTextNode(pares[i][1]));
+    });
+  }
+
+  function aplicar() {
+    const t = T();
+    document.documentElement.lang = IDIOMA;
+    boton.textContent = t.boton;
+    boton.setAttribute('aria-label', t.botonTitulo);
+    boton.title = t.botonTitulo;
+
+    poner('.tagline__fixed', t.tagline.fijo);
+    poner('.tagline .sr-only', t.tagline.sr);
+
+    ponerConClave(Array.from(document.querySelectorAll('.gato__frase')), t.gato.frases, 'gato__clave');
+
+    poner('.quehace__seccion', t.mano.seccion);
+    poner('.quehace__rotulo', t.mano.rotulo);
+    poner('.quehace__frase .sr-only', t.mano.titular);
+    poner('.quehace__frase-sizer', t.mano.titular);
+    ponerConClave(Array.from(document.querySelectorAll('.hito__desc')), t.mano.fases, 'hito__clave');
+    document.querySelectorAll('.hito').forEach((h, i) => { h.textContent = t.mano.pildoras[i]; });
+
+    poner('.probs__rotulo', t.probs.rotulo);
+    poner('.probs__titulo', t.probs.titulo);
+
+    // que cada módulo vuelva a pintar: el titular tecleado, el rótulo del
+    // gato, la frase de problemas y la altura de las tarjetas
+    document.dispatchEvent(new CustomEvent('augurio:idioma'));
+    window.dispatchEvent(new Event('resize'));
+  }
+
+  boton.addEventListener('click', function () {
+    IDIOMA = IDIOMA === 'es' ? 'en' : 'es';
+    try { localStorage.setItem('augurio:idioma', IDIOMA); } catch (e) {}
+    aplicar();
+  });
+
+  try {
+    const guardado = localStorage.getItem('augurio:idioma');
+    if (guardado === 'en' || guardado === 'es') IDIOMA = guardado;
+  } catch (e) {}
+  aplicar();
 })();

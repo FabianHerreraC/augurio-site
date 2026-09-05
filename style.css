@@ -771,8 +771,10 @@ html, body {
   .quehace__tarjeta,
   .hitos { position: absolute; z-index: 1; }
 
+  /* Se corre a la derecha para dejarle sitio al interruptor de idioma, que va
+     fijo en esa misma esquina: con el 8% de la maqueta quedaban a 2 px. */
   .quehace__seccion {
-    left: 8%;
+    left: 14%;
     top: 4.4%;
     font-size: max(8px, 2.6vw);
   }
@@ -985,4 +987,41 @@ html, body {
 
   .hitos { top: 90%; }
   .hito { font-size: 9px; padding: 0.4em 0.6em; }
+}
+
+/* ---- interruptor de idioma ----
+   Fijo arriba a la izquierda. La página alterna secciones negras y de papel,
+   así que en vez de darle un fondo se mezcla en diferencia con lo que tenga
+   debajo: sobre negro se ve blanco y sobre papel se ve negro, siempre legible
+   y sin añadir una caja que ensucie la composición. */
+.idioma {
+  position: fixed;
+  left: 18px;
+  top: 16px;
+  z-index: 50;
+  padding: 4px 3px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1;
+  color: #fff;
+  mix-blend-mode: difference;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.25s ease;
+}
+
+.idioma:hover { opacity: 1; }
+
+.idioma:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 3px;
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .idioma { transition: none; }
 }

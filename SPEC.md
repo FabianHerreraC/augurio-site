@@ -160,7 +160,44 @@ Al cambiarlas hay que medir eso, no mirarlas.
 
 ---
 
-## 4. Móvil
+## 4. Los dos idiomas
+
+Todo el texto visible vive en `TEXTOS`, al principio de `app.js`, en español e
+inglés. `IDIOMA` guarda el actual y `T()` devuelve el bloque que toca.
+
+Hay dos clases de texto y se tratan distinto:
+
+- **El que vive en arrays** (palabras del header, rótulos del gato, frases de
+  problemas). Los módulos lo leen del diccionario **en el momento de pintar**,
+  nunca lo capturan al arrancar: por eso `WORDS`, `ROTULOS` y `PARTES` son
+  funciones, no constantes.
+- **El que vive en el HTML** (frases del gato, fases de la mano, píldoras,
+  rótulos, titular). Lo reescribe `aplicarIdioma()` en el módulo del
+  interruptor.
+
+Al terminar se emite `augurio:idioma`. Cada módulo con estado escucha y repinta:
+
+| Módulo | Por qué necesita escuchar |
+|---|---|
+| header | rehacer los medidores: las palabras inglesas no miden lo mismo |
+| mano | volver a teclear el titular y remedir el alto de la tarjeta |
+| gato | `medir()` sólo actúa si cambia la frase activa, y no cambia |
+| problemas | repintar la frase que esté puesta, en el otro idioma |
+
+La elección se guarda en `localStorage` bajo `augurio:idioma`.
+
+El interruptor va fijo arriba a la izquierda con `mix-blend-mode: difference`:
+sobre el negro se ve blanco y sobre el papel se ve negro, sin necesidad de
+darle un fondo. En móvil el rótulo «QUE» de la mano se corre al 14% para no
+quedar debajo; con el 8% de la maqueta quedaban a 2 px.
+
+La sonda acepta `?lang=en`, porque el texto inglés no mide lo mismo y las
+maquetaciones ajustadas —la tarjeta del gato, el polígono de problemas— pueden
+romperse en un idioma y no en el otro.
+
+---
+
+## 5. Móvil
 
 Corte en `max-width: 900px`.
 
@@ -179,7 +216,7 @@ Corte en `max-width: 900px`.
 
 ---
 
-## 5. Cómo verificar
+## 6. Cómo verificar
 
 **Nunca abrir los archivos con `file://` ni con un servidor con caché.** El
 navegador sirvió `app.js` viejo tres veces y provocó tres diagnósticos falsos.
@@ -191,6 +228,7 @@ la única forma de que `vw`, `svh` y las media queries resuelvan bien:
 
     http://127.0.0.1:8232/dev/sonda.html?w=390&h=844
     http://127.0.0.1:8232/dev/sonda.html?w=1440&h=900
+    …y las mismas dos con &lang=en
 
 Pulsa **Comprobar** y verifica la geometría de las cuatro secciones y que la
 coreografía del gato avance con el scroll. Correrla **a los dos anchos** después

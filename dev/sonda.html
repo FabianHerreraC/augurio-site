@@ -40,7 +40,13 @@ const W = +(p.get('w') || 390), H = +(p.get('h') || 844);
 const marco = document.getElementById('marco');
 marco.style.width = W + 'px';
 marco.style.height = H + 'px';
-document.getElementById('tam').textContent = ` ${W}x${H} ${W <= 900 ? '(móvil)' : '(escritorio)'}`;
+// ?lang=en comprueba la maquetación con los textos ingleses, que no miden lo
+// mismo: el iframe es del mismo origen, así que basta con dejar la elección
+// puesta antes de que cargue.
+const LANG = p.get('lang') === 'en' ? 'en' : 'es';
+try { localStorage.setItem('augurio:idioma', LANG); } catch (e) {}
+document.getElementById('tam').textContent =
+  ` ${W}x${H} ${W <= 900 ? '(móvil)' : '(escritorio)'} · ${LANG.toUpperCase()}`;
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 const rect = (d, sel) => {
@@ -231,6 +237,25 @@ async function correr() {
   const sizer = d.querySelector('.quehace__frase-sizer');
   comprobar('mano: el medidor del titular sigue oculto',
     sizer && w.getComputedStyle(sizer).visibility === 'hidden', '');
+
+  // ---- el interruptor de idioma no pisa nada -----------------------------
+  // Va fijo en la esquina superior izquierda, que es donde varias secciones
+  // ponen su rótulo pequeño.
+  const bot = d.querySelector('.idioma').getBoundingClientRect();
+  const pisados = [];
+  for (const s2 of ['.quehace__seccion', '.quehace__rotulo', '.gato__rotulo',
+                    '.probs__rotulo', '.probs__titulo', '.tagline']) {
+    for (const sec2 of ['header', 'quehace', 'gato', 'probs']) {
+      const el = d.querySelector('#' + sec2 + ' ' + s2) || (sec2 === 'header' && d.querySelector(s2));
+      if (!el) continue;
+      const r = el.getBoundingClientRect();
+      if (!r.width) continue;
+      if (bot.left < r.right + 6 && r.left < bot.right + 6 &&
+          bot.top < r.bottom + 6 && r.top < bot.bottom + 6) pisados.push(s2);
+    }
+  }
+  comprobar('el interruptor de idioma no pisa ningún rótulo',
+    pisados.length === 0, pisados.join('  ') || 'con holgura en las cuatro secciones');
 
   // ---- sin scroll horizontal en toda la página ---------------------------
   comprobar('la página no se desplaza en horizontal',
