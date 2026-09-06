@@ -3,7 +3,7 @@
   --fg: #f2f2f2;
   /* proporciones tomadas de Auguriositeok.png */
   --logo-y: 19.2%;
-  --tagline-y: 73.2%;
+  --tagline-y: 49.6%;   /* header3.png la centra verticalmente */
 }
 
 * { box-sizing: border-box; }
@@ -50,16 +50,102 @@ html, body {
   z-index: 1;
 }
 
+/* ---- barra superior ----
+   Medidas de header3.png (2560 x 1721). El logo baja de tamaño y sube a la
+   barra; el menú va a la derecha. */
 .header__logo {
   position: absolute;
   left: 50%;
-  top: var(--logo-y);
+  top: 2.5%;
   transform: translate(-50%, -50%);
-  width: clamp(92px, 7.7vw, 210px);
+  width: clamp(62px, 5.3%, 150px);
   height: auto;
   filter: brightness(0) invert(1);
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.header__nav {
+  position: absolute;
+  right: 3.6%;
+  top: 2.5%;
+  transform: translateY(-50%);
+  display: flex;
+  gap: 1.5em;
+  z-index: 2;
+}
+
+.header__enlace {
+  font-size: max(10px, 0.7vw);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-decoration: none;
+  opacity: 0.75;
+  transition: opacity 0.25s ease;
+}
+
+.header__enlace:hover,
+.header__enlace:focus-visible { opacity: 1; }
+
+/* TEORIA y CONTACTO todavía no llevan a ninguna parte: se ven igual pero no
+   fingen ser enlaces. */
+.header__enlace.is-pendiente { cursor: default; }
+
+/* El botón de menú sólo existe en móvil: es el punto blanco de la maqueta. */
+.header__menu { display: none; }
+
+/* ---- pie del header ---- */
+.header__seccion {
+  position: absolute;
+  left: 2%;
+  bottom: 2.4%;
+  margin: 0;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: max(9px, 0.7vw);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: #fff;
+}
+
+/* el testimonio, centrado abajo */
+.header__cita {
+  position: absolute;
+  left: 50%;
+  bottom: 2.1%;
+  transform: translateX(-50%);
+  width: 40.2%;
+  margin: 0;
+  text-align: center;
+}
+
+.header__cita p {
+  margin: 0;
+  font-size: max(10px, 0.62vw);
+  font-weight: 700;
+  line-height: 1.4;
+  color: #fff;
+}
+
+/* la flecha de bajar */
+.header__bajar {
+  position: absolute;
+  left: 94.5%;
+  bottom: 2.3%;
+  width: 2.07%;
+  min-width: 24px;
+  color: #fff;
+  opacity: 0.9;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.header__bajar svg { display: block; width: 100%; height: auto; }
+
+.header__bajar:hover { opacity: 1; transform: translateY(3px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .header__enlace, .header__bajar { transition: none; }
 }
 
 /* ---- frase ---- */
@@ -716,6 +802,76 @@ html, body {
    como imagen y el texto pasa a flujo vertical con cuerpo legible. */
 
 @media (max-width: 900px) {
+
+  /* ---- header ----
+     Otra composición: la cita sube arriba, el logo baja al centro entre las
+     dos figuras, la frase baja al 75% y el menú se pliega detrás de un punto.
+     Medidas de "header mobile3.png" (984 x 1586). */
+  .header { --tagline-y: 75.3%; }
+
+  .header__logo {
+    left: 51%;
+    top: 43.3%;
+    width: 19.2%;
+  }
+
+  /* El punto de la maqueta. Es el botón que despliega el menú, que en esta
+     anchura no cabe en una fila. */
+  .header__menu {
+    display: block;
+    position: absolute;
+    right: 3.2%;
+    top: 1.5%;
+    z-index: 3;
+    width: 4.4%;
+    min-width: 15px;
+    aspect-ratio: 1;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: #fff;
+    cursor: pointer;
+    transition: transform 0.25s ease;
+  }
+
+  .header__menu[aria-expanded="true"] { transform: scale(0.72); }
+
+  .header__nav {
+    right: 3.2%;
+    top: 7%;
+    transform: none;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.9em;
+    /* plegado hasta que se pulse el punto */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.25s ease, visibility 0.25s;
+  }
+
+  .header__nav.is-abierto { opacity: 1; visibility: visible; }
+
+  .header__enlace { font-size: 13px; }
+
+  .header__cita {
+    left: 2.3%;
+    right: 30.5%;
+    bottom: auto;
+    top: 13.8%;
+    width: auto;
+    transform: none;
+    text-align: left;
+  }
+
+  .header__cita p { font-size: max(12px, 3.1vw); line-height: 1.45; }
+
+  .header__seccion { left: 5%; bottom: 4.1%; font-size: 9px; }
+
+  .header__bajar { left: 88.7%; bottom: 3.1%; width: 5.4%; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .header__menu, .header__nav { transition: none; }
+  }
 
   /* ---- sección de la mano ----
      La composición de escritorio no cabe en un móvil, así que el contenido se

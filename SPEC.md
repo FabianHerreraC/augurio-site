@@ -23,6 +23,8 @@ un número del CSS no cuadra, se vuelve a medir sobre ellas.
 | gato (`.gato__marco`) | 2560 × 1696 | `AuguriositeDesktop.png` |
 | problemas escritorio (`.probs__marco`) | 2560 × 1682 | `AuguriositeDesktop.png` |
 | problemas móvil (`.probs__marco`) | 984 × 1361 | `AuguriositeMobile.png` |
+| header escritorio | 2560 × 1721 | `header3.png` |
+| header móvil | 984 × 1586 | `header-mobile3.png` |
 
 La tipografía dentro de un marco va en `cqw` (proporcional al marco, no al
 viewport) con un piso en px: `max(12px, 2.03cqw)`. Sin el piso, la proporción
@@ -89,6 +91,21 @@ pantalla sin duplicar la instancia.
 ## 3. Acoples que no se ven en el código
 
 Esta es la sección importante. Todo lo de aquí ya rompió algo al menos una vez.
+
+### El header cambia de composición, no sólo de medidas
+
+En escritorio el logo va pequeño en la barra de arriba, con el menú a la
+derecha y la frase centrada. En móvil el logo baja al centro, entre las dos
+figuras; la cita sube arriba; la frase baja al 75%; y los tres enlaces se
+pliegan detrás del punto blanco. No es el mismo bloque movido: son dos
+composiciones, y por eso `--tagline-y` se redefine en el corte de móvil.
+
+### font-size en porcentaje no escala con el ancho
+
+Un `font-size: 0.7%` se mide contra la fuente heredada, no contra el
+contenedor, así que `max(10px, 0.7%)` da siempre 10px. Para que la tipografía
+del header escale con la pantalla tiene que ir en `vw`. Las anchuras sí pueden
+ir en `%`, que ahí sí es del contenedor.
 
 ### La tarjeta y el rótulo del gato **no** cuelgan del marco
 
@@ -229,6 +246,10 @@ la única forma de que `vw`, `svh` y las media queries resuelvan bien:
     http://127.0.0.1:8232/dev/sonda.html?w=390&h=844
     http://127.0.0.1:8232/dev/sonda.html?w=1440&h=900
     …y las mismas dos con &lang=en
+
+`&escala=0.55` encoge el iframe sólo visualmente, para poder ver un render de
+escritorio entero en un panel angosto. La maquetación se sigue calculando
+contra el tamaño pedido.
 
 Pulsa **Comprobar** y verifica la geometría de las cuatro secciones y que la
 coreografía del gato avance con el scroll. Correrla **a los dos anchos** después

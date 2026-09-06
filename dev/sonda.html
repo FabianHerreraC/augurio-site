@@ -40,6 +40,16 @@ const W = +(p.get('w') || 390), H = +(p.get('h') || 844);
 const marco = document.getElementById('marco');
 marco.style.width = W + 'px';
 marco.style.height = H + 'px';
+// ?escala=0.55 encoge el iframe *visualmente* para poder ver un render de
+// escritorio completo en un panel angosto. La maquetación se sigue calculando
+// contra W x H, así que las medidas no cambian.
+const ESCALA = +(p.get('escala') || 1);
+if (ESCALA !== 1) {
+  marco.style.transformOrigin = 'top left';
+  marco.style.transform = 'scale(' + ESCALA + ')';
+  marco.style.marginRight = (W * (ESCALA - 1)) + 'px';
+  marco.style.marginBottom = (H * (ESCALA - 1)) + 'px';
+}
 // ?lang=en comprueba la maquetación con los textos ingleses, que no miden lo
 // mismo: el iframe es del mismo origen, así que basta con dejar la elección
 // puesta antes de que cargue.
@@ -97,6 +107,51 @@ async function correr() {
   }).filter(Boolean);
   comprobar('el campo de puntos pinta en las 4 secciones',
     lienzos.length === 0, lienzos.join('  ') || 'los 4 con píxeles escritos');
+
+  // ---- header ------------------------------------------------------------
+  w.scrollTo(0, 0);
+  await esperar(500);
+
+  const hLogo = rect(d, '.header__logo'), hTag = rect(d, '.tagline');
+  const hCita = rect(d, '.header__cita'), hBaj = rect(d, '.header__bajar');
+  const hSec = rect(d, '.header__seccion');
+  comprobar('header: los seis elementos están y caben en pantalla',
+    [hLogo, hTag, hCita, hBaj, hSec].every((r) => r && r.w > 0 &&
+      r.x >= -1 && r.x + r.w <= VW + 1 && r.y >= -1 && r.y + r.h <= VH + 1),
+    `logo ${hLogo.w}px · cita ${hCita.w}x${hCita.h} · flecha ${hBaj.w}px`);
+
+  // el logo sube a la barra en escritorio y baja al centro en móvil
+  comprobar('header: el logo cae donde lo pone la maqueta',
+    movil ? Math.abs((hLogo.y + hLogo.h / 2) / VH - 0.433) < 0.03
+          : Math.abs((hLogo.y + hLogo.h / 2) / VH - 0.025) < 0.02,
+    `centro en ${(((hLogo.y + hLogo.h / 2) / VH) * 100).toFixed(1)}% del alto`);
+
+  // la frase va centrada en escritorio y baja al 75% en móvil
+  comprobar('header: la frase cae donde la pone la maqueta',
+    Math.abs((hTag.y + hTag.h / 2) / VH - (movil ? 0.753 : 0.496)) < 0.03,
+    `centro en ${(((hTag.y + hTag.h / 2) / VH) * 100).toFixed(1)}% del alto`);
+
+  // en móvil el menú se pliega tras el punto; en escritorio se ve la fila
+  const menu = d.querySelector('.header__menu');
+  const nav = d.querySelector('.header__nav');
+  const menuVisible = w.getComputedStyle(menu).display !== 'none';
+  const navVisible = w.getComputedStyle(nav).visibility === 'visible';
+  comprobar('header: el menú se pliega en móvil y se despliega en escritorio',
+    movil ? (menuVisible && !navVisible) : (!menuVisible && navVisible),
+    movil ? 'punto visible, fila plegada' : 'fila visible, sin punto');
+
+  if (movil) {
+    menu.click();
+    await esperar(700);   // la transición dura 250 ms, más el repintado
+    comprobar('header: el punto despliega los tres enlaces',
+      w.getComputedStyle(nav).visibility === 'visible' &&
+      d.querySelectorAll('.header__enlace').length === 3, '');
+    menu.click();
+    await esperar(700);
+  } else {
+    comprobar('header: los tres enlaces están escritos',
+      Array.from(d.querySelectorAll('.header__enlace')).every((e) => e.textContent.trim()), '');
+  }
 
   // ---- gato: coreografía de scroll ---------------------------------------
   const gato = seccion('gato');

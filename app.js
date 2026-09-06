@@ -5,6 +5,13 @@
    el HTML lo reescribe aplicarIdioma(). */
 const TEXTOS = {
   es: {
+    header: {
+      nav: ['INICIO', 'TEORIA', 'CONTACTO'],
+      seccion: 'INICIO',
+      cita: '\u201cNo sentí que Augurio me dijera quiénes éramos, sino que por fin pudimos ver con claridad qué nos hacía valiosos como organización. Fue la primera vez que sentí que nos escuchaban de verdad, sin encasillarnos en una categoría genérica.\u201d',
+      menu: 'Menú',
+      bajar: 'Ir a la siguiente sección'
+    },
     tagline: {
       fijo: 'Conversaciones',
       largo: 'reveladoras',   // reserva el ancho de la palabra más larga
@@ -55,6 +62,13 @@ const TEXTOS = {
   },
 
   en: {
+    header: {
+      nav: ['HOME', 'THEORY', 'CONTACT'],
+      seccion: 'HOME',
+      cita: '\u201cI didn\u2019t feel that Augurio told us who we were; I felt that we could finally see clearly what made us valuable as an organization. It was the first time I felt we were truly heard, instead of being filed under some generic category.\u201d',
+      menu: 'Menu',
+      bajar: 'Go to the next section'
+    },
     tagline: {
       fijo: 'Conversations that are',
       largo: 'revealing',
@@ -367,7 +381,14 @@ function createDotField(canvas, opts) {
 /* ---- header: puntos claros sobre negro ---- */
 (function () {
   const c = document.getElementById('dust');
-  if (c) createDotField(c, { src: 'headerA.png', paper: 10, zoomCap: 1.35 });
+  if (!c) return;
+  createDotField(c, {
+    src: 'headerA.png',
+    paper: 10,
+    zoomCap: 1.35
+    // El encuadre se deja como estaba: header3.png trae las figuras al mismo
+    // tamaño y en el mismo sitio, lo que cambia es lo que va encima.
+  });
 })();
 
 /* ---- sección "qué hace": la mano, puntos oscuros sobre papel ----
@@ -1124,6 +1145,13 @@ function createDifuminado(canvas, opts) {
     boton.setAttribute('aria-label', t.botonTitulo);
     boton.title = t.botonTitulo;
 
+    const enlaces = document.querySelectorAll('.header__enlace');
+    enlaces.forEach((e, i) => { if (t.header.nav[i]) e.textContent = t.header.nav[i]; });
+    poner('.header__seccion', t.header.seccion);
+    poner('#headerCita', t.header.cita);
+    poner('#headerMenuTexto', t.header.menu);
+    poner('.header__bajar .sr-only', t.header.bajar);
+
     poner('.tagline__fixed', t.tagline.fijo);
     poner('.tagline .sr-only', t.tagline.sr);
 
@@ -1156,4 +1184,36 @@ function createDifuminado(canvas, opts) {
     if (guardado === 'en' || guardado === 'es') IDIOMA = guardado;
   } catch (e) {}
   aplicar();
+})();
+
+/* ---- menú del header ----
+   En móvil los tres enlaces no caben en una fila, así que se pliegan detrás
+   del punto blanco de la maqueta. En escritorio el botón no existe y la fila
+   se ve siempre. */
+(function () {
+  const boton = document.getElementById('headerMenu');
+  const nav = document.getElementById('headerNav');
+  if (!boton || !nav) return;
+
+  const cerrar = () => {
+    nav.classList.remove('is-abierto');
+    boton.setAttribute('aria-expanded', 'false');
+  };
+
+  boton.addEventListener('click', function () {
+    const abierto = nav.classList.toggle('is-abierto');
+    boton.setAttribute('aria-expanded', abierto ? 'true' : 'false');
+  });
+
+  nav.addEventListener('click', function (e) {
+    if (e.target.closest('a')) cerrar();
+  });
+
+  document.addEventListener('keydown', (e) => e.key === 'Escape' && cerrar());
+
+  // al pasar a escritorio el botón desaparece: no puede quedarse un estado
+  // "abierto" gobernando una fila que ya se ve entera
+  window.addEventListener('resize', function () {
+    if (window.innerWidth > 900) cerrar();
+  });
 })();
