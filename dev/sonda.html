@@ -153,6 +153,18 @@ async function correr() {
       Array.from(d.querySelectorAll('.header__enlace')).every((e) => e.textContent.trim()), '');
   }
 
+  // El testimonio entra solo: un segundo quieto y luego un fundido lento. Si
+  // se quedara en opacidad 0 no habría ningún error en consola, así que se
+  // espera a que termine en vez de dar por hecho que está.
+  const elCita = d.querySelector('.header__cita');
+  let opCita = 0;
+  for (let i = 0; i < 40 && opCita < 0.99; i++) {
+    await esperar(150);
+    opCita = +w.getComputedStyle(elCita).opacity;
+  }
+  comprobar('header: el testimonio termina visible tras su fundido',
+    opCita > 0.95, `opacidad ${opCita}`);
+
   // ---- gato: coreografía de scroll ---------------------------------------
   const gato = seccion('gato');
   const top0 = gato.getBoundingClientRect().top + w.scrollY;

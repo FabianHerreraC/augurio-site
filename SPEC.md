@@ -100,6 +100,14 @@ figuras; la cita sube arriba; la frase baja al 75%; y los tres enlaces se
 pliegan detrás del punto blanco. No es el mismo bloque movido: son dos
 composiciones, y por eso `--tagline-y` se redefine en el corte de móvil.
 
+### El testimonio del header entra con retardo
+
+`.header__cita` arranca en opacidad 0 y sube con un `animation` de 1.8 s y un
+segundo de retardo. Va en CSS y no en JS porque no depende de nada más que de
+que la página se pinte. El riesgo es que un cambio lo deje clavado en 0 sin
+dar ningún error, así que la sonda espera a que el fundido termine en vez de
+medir y seguir.
+
 ### font-size en porcentaje no escala con el ancho
 
 Un `font-size: 0.7%` se mide contra la fuente heredada, no contra el
