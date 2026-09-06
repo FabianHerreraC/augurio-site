@@ -100,6 +100,17 @@ figuras; la cita sube arriba; la frase baja al 75%; y los tres enlaces se
 pliegan detrás del punto blanco. No es el mismo bloque movido: son dos
 composiciones, y por eso `--tagline-y` se redefine en el corte de móvil.
 
+### El canal izquierdo del header sale de un margen único
+
+El interruptor de idioma, el rótulo vertical y —en móvil— la cita se apoyan en
+`--margen`. No basta con darles el mismo `left`: el texto vertical centra sus
+glifos girados sobre la línea base central, así que su tinta cae ~1.5 px por
+dentro. Por eso `.header__seccion` lleva `margin-left: -0.15em`, en em para que
+aguante cualquier tamaño. La caja queda corrida a propósito; lo que se alinea
+es la tinta.
+
+La sonda compara el `left` calculado, no la caja, justo por eso.
+
 ### El testimonio del header entra con retardo
 
 `.header__cita` arranca en opacidad 0 y sube con un `animation` de 4.5 s y dos

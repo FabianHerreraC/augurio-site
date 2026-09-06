@@ -4,6 +4,9 @@
   /* proporciones tomadas de Auguriositeok.png */
   --logo-y: 19.2%;
   --tagline-y: 49.6%;   /* header3.png la centra verticalmente */
+  /* Margen izquierdo único: lo comparten el interruptor de idioma, el rótulo
+     vertical y la cita. Si cambia, se mueven los tres a la vez. */
+  --margen: clamp(18px, 2.1vw, 44px);
 }
 
 * { box-sizing: border-box; }
@@ -98,11 +101,18 @@ html, body {
 /* ---- pie del header ---- */
 .header__seccion {
   position: absolute;
-  left: 2%;
+  left: var(--margen);
   bottom: 2.4%;
   margin: 0;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
+  /* En escritura vertical el interlineado es el ancho de la caja: a 1 la caja
+     se ciñe al texto. Aun así los glifos girados quedan centrados sobre la
+     línea base central, así que la tinta cae un poco por dentro; el margen
+     negativo la devuelve al borde. Va en em para que aguante cualquier
+     tamaño. */
+  line-height: 1;
+  margin-left: -0.15em;
   font-size: max(9px, 0.7vw);
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -135,7 +145,7 @@ html, body {
 
 .header__cita p {
   margin: 0;
-  font-size: max(10px, 0.62vw);
+  font-size: max(9px, 0.57vw);
   font-weight: 700;
   line-height: 1.4;
   color: #fff;
@@ -867,7 +877,7 @@ html, body {
   .header__enlace { font-size: 13px; }
 
   .header__cita {
-    left: 2.3%;
+    left: var(--margen);
     right: 30.5%;
     bottom: auto;
     top: 13.8%;
@@ -876,9 +886,9 @@ html, body {
     text-align: left;
   }
 
-  .header__cita p { font-size: max(12px, 3.1vw); line-height: 1.45; }
+  .header__cita p { font-size: max(11px, 2.85vw); line-height: 1.45; }
 
-  .header__seccion { left: 5%; bottom: 4.1%; font-size: 9px; }
+  .header__seccion { left: var(--margen); bottom: 4.1%; font-size: 9px; }
 
   .header__bajar { left: 88.7%; bottom: 3.1%; width: 5.4%; }
 
@@ -1165,10 +1175,11 @@ html, body {
    y sin añadir una caja que ensucie la composición. */
 .idioma {
   position: fixed;
-  left: 18px;
+  left: var(--margen);
   top: 16px;
   z-index: 50;
-  padding: 4px 3px;
+  /* sin relleno lateral: con él la tinta caía 3 px por dentro del margen */
+  padding: 4px 0;
   border: 0;
   background: none;
   font: inherit;

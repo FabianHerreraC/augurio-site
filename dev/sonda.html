@@ -153,6 +153,20 @@ async function correr() {
       Array.from(d.querySelectorAll('.header__enlace')).every((e) => e.textContent.trim()), '');
   }
 
+  // Los tres elementos del canal izquierdo tienen que salir del mismo margen.
+  // Se compara el `left` calculado y no la caja, porque el rótulo vertical
+  // lleva un margen negativo que compensa el centrado de sus glifos: la caja
+  // queda corrida a propósito, pero el origen debe ser el mismo.
+  const margen = w.getComputedStyle(d.documentElement).getPropertyValue('--margen');
+  const izqDe = (sel) => w.getComputedStyle(d.querySelector(sel)).left;
+  const anclados = movil
+    ? ['.idioma', '.header__seccion', '.header__cita']
+    : ['.idioma', '.header__seccion'];
+  const lefts = anclados.map(izqDe);
+  comprobar('header: el canal izquierdo sale de un único margen',
+    lefts.every((v) => v === lefts[0]),
+    anclados.map((s, i) => s.replace('.header__', '').replace('.', '') + ' ' + lefts[i]).join('  '));
+
   // El testimonio entra solo: un segundo quieto y luego un fundido lento. Si
   // se quedara en opacidad 0 no habría ningún error en consola, así que se
   // espera a que termine en vez de dar por hecho que está.
