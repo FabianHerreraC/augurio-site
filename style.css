@@ -109,9 +109,9 @@ html, body {
   color: #fff;
 }
 
-/* El testimonio, centrado abajo. Entra solo, un segundo después de cargar y
-   con un fundido lento: no compite con el logo ni con la frase, que ya están
-   escribiéndose. Va en CSS y no en JS porque no depende de nada más. */
+/* El testimonio, centrado abajo. Entra solo, dos segundos después de cargar y
+   con un fundido muy lento: no compite con el logo ni con la frase, que ya
+   están escribiéndose. Va en CSS y no en JS porque no depende de nada más. */
 .header__cita {
   position: absolute;
   left: 50%;
@@ -121,7 +121,7 @@ html, body {
   margin: 0;
   text-align: center;
   opacity: 0;
-  animation: cita-entra 1.8s ease 1s forwards;
+  animation: cita-entra 4.5s ease-in-out 2s forwards;
 }
 
 @keyframes cita-entra {

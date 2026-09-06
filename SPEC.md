@@ -102,8 +102,8 @@ composiciones, y por eso `--tagline-y` se redefine en el corte de móvil.
 
 ### El testimonio del header entra con retardo
 
-`.header__cita` arranca en opacidad 0 y sube con un `animation` de 1.8 s y un
-segundo de retardo. Va en CSS y no en JS porque no depende de nada más que de
+`.header__cita` arranca en opacidad 0 y sube con un `animation` de 4.5 s y dos
+segundos de retardo. Va en CSS y no en JS porque no depende de nada más que de
 que la página se pinte. El riesgo es que un cambio lo deje clavado en 0 sin
 dar ningún error, así que la sonda espera a que el fundido termine en vez de
 medir y seguir.
