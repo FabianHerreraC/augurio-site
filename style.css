@@ -7,6 +7,9 @@
   /* Margen izquierdo único: lo comparten el interruptor de idioma, el rótulo
      vertical y la cita. Si cambia, se mueven los tres a la vez. */
   --margen: clamp(18px, 2.1vw, 44px);
+  /* Diámetro del punto de menú. Lo comparte el interruptor de idioma, que en
+     móvil toma esa misma altura para que los dos centros coincidan. */
+  --bolita: clamp(15px, 4.4vw, 22px);
 }
 
 * { box-sizing: border-box; }
@@ -840,15 +843,16 @@ html, body {
 
   /* El punto de la maqueta. Es el botón que despliega el menú, que en esta
      anchura no cabe en una fila. */
+  /* El interruptor de idioma toma este mismo top y esta misma altura, así que
+     sus centros coinciden exactamente sin calcular nada. */
   .header__menu {
     display: block;
     position: absolute;
     right: 3.2%;
     top: 1.5%;
     z-index: 3;
-    width: 4.4%;
-    min-width: 15px;
-    aspect-ratio: 1;
+    width: var(--bolita);
+    height: var(--bolita);
     padding: 0;
     border: 0;
     border-radius: 50%;
@@ -875,6 +879,12 @@ html, body {
   .header__nav.is-abierto { opacity: 1; visibility: visible; }
 
   .header__enlace { font-size: 13px; }
+
+  .idioma {
+    top: 1.5%;
+    height: var(--bolita);
+    transform: none;
+  }
 
   .header__cita {
     left: var(--margen);
@@ -1176,10 +1186,14 @@ html, body {
 .idioma {
   position: fixed;
   left: var(--margen);
-  top: 16px;
+  /* mismo eje que el logo y el menú de la barra superior */
+  top: 2.5%;
+  transform: translateY(-50%);
   z-index: 50;
+  display: flex;
+  align-items: center;
   /* sin relleno lateral: con él la tinta caía 3 px por dentro del margen */
-  padding: 4px 0;
+  padding: 0;
   border: 0;
   background: none;
   font: inherit;

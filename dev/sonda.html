@@ -167,6 +167,15 @@ async function correr() {
     lefts.every((v) => v === lefts[0]),
     anclados.map((s, i) => s.replace('.header__', '').replace('.', '') + ' ' + lefts[i]).join('  '));
 
+  // El interruptor comparte eje con el punto del menú en móvil y con el logo
+  // y la fila de enlaces en escritorio.
+  const centroDe = (sel) => { const r = d.querySelector(sel).getBoundingClientRect();
+    return (r.top + r.bottom) / 2; };
+  const refEje = movil ? '.header__menu' : '.header__logo';
+  const desfase = Math.abs(centroDe('.idioma') - centroDe(refEje));
+  comprobar('header: el interruptor comparte eje con ' + (movil ? 'el punto' : 'el logo'),
+    desfase < 1, `desfase ${desfase.toFixed(2)}px`);
+
   // El testimonio entra solo: un segundo quieto y luego un fundido lento. Si
   // se quedara en opacidad 0 no habría ningún error en consola, así que se
   // espera a que termine en vez de dar por hecho que está.

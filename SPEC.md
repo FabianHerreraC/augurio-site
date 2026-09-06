@@ -111,6 +111,12 @@ es la tinta.
 
 La sonda compara el `left` calculado, no la caja, justo por eso.
 
+En vertical el interruptor comparte eje con el punto del menú en móvil y con el
+logo y la fila de enlaces en escritorio. No se calcula: en móvil el interruptor
+toma el mismo `top` y la misma altura que el punto —`--bolita`—, así que los
+centros coinciden solos; en escritorio los tres se cuelgan del 2.5% del alto
+con `translateY(-50%)`.
+
 ### El testimonio del header entra con retardo
 
 `.header__cita` arranca en opacidad 0 y sube con un `animation` de 4.5 s y dos
