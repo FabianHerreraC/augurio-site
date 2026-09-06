@@ -59,6 +59,19 @@ document.getElementById('tam').textContent =
   ` ${W}x${H} ${W <= 900 ? '(móvil)' : '(escritorio)'} · ${LANG.toUpperCase()}`;
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Espera a que una condición se cumpla en vez de a un reloj. Con cuatro campos
+// de puntos y mil doscientas letras en marcha, el repintado tras un scroll
+// puede tardar bastante más que un plazo fijo, y una espera corta lee el
+// estado anterior y da un fallo falso.
+const esperarA = async (fn, ms) => {
+  const fin = performance.now() + (ms || 4000);
+  for (;;) {
+    if (fn()) return true;
+    if (performance.now() > fin) return false;
+    await esperar(120);
+  }
+};
 const rect = (d, sel) => {
   const e = d.querySelector(sel);
   if (!e) return null;
@@ -142,12 +155,18 @@ async function correr() {
 
   if (movil) {
     menu.click();
-    await esperar(700);   // la transición dura 250 ms, más el repintado
+    // Se espera al estado, no a un reloj: con la página cargando cuatro campos
+    // de puntos el repintado puede tardar bastante más que la transición.
+    let visible = false;
+    for (let i = 0; i < 20 && !visible; i++) {
+      await esperar(150);
+      visible = w.getComputedStyle(nav).visibility === 'visible';
+    }
     comprobar('header: el punto despliega los tres enlaces',
-      w.getComputedStyle(nav).visibility === 'visible' &&
-      d.querySelectorAll('.header__enlace').length === 3, '');
+      visible && d.querySelectorAll('.header__enlace').length === 3,
+      visible ? '' : 'el menú no llegó a mostrarse');
     menu.click();
-    await esperar(700);
+    await esperar(500);
   } else {
     comprobar('header: los tres enlaces están escritos',
       Array.from(d.querySelectorAll('.header__enlace')).every((e) => e.textContent.trim()), '');
@@ -200,9 +219,11 @@ async function correr() {
   });
 
   const hitos = [];
-  for (const q of [0.02, 0.25, 0.50, 0.75]) {
+  const esperadas = [-1, 1, 3, 5];
+  for (let k = 0; k < 4; k++) {
+    const q = [0.02, 0.25, 0.50, 0.75][k];
     w.scrollTo(0, Math.round(top0 + q * rec));
-    await esperar(700);
+    await esperarA(() => leer().frase === esperadas[k], 5000);
     hitos.push({ q, ...leer() });
   }
   comprobar('gato: la frase avanza con el scroll',
@@ -223,9 +244,13 @@ async function correr() {
   // La tarjeta crece con la frase que le toque. La 5 es la más larga y era la
   // única que llegaba al borde inferior, así que hay que recorrer las seis.
   const tarj = [];
-  for (const q of [0.10, 0.23, 0.35, 0.47, 0.60, 0.72]) {
+  for (let k = 0; k < 6; k++) {
+    const q = [0.10, 0.23, 0.35, 0.47, 0.60, 0.72][k];
     w.scrollTo(0, Math.round(top0 + q * rec));
-    await esperar(650);
+    await esperarA(() => {
+      const a = Array.from(d.querySelectorAll('.gato__frase')).findIndex((f) => f.classList.contains('is-in'));
+      return a === k;
+    }, 5000);
     const r = d.getElementById('gatoTarjeta').getBoundingClientRect();
     tarj.push({ n: tarj.length + 1, aire: Math.round(VH - r.bottom), alto: Math.round(r.height) });
   }
@@ -281,52 +306,85 @@ async function correr() {
   const mano = seccion('quehace');
   const mTop = mano.getBoundingClientRect().top + w.scrollY;
   const mRec = mano.offsetHeight - w.innerHeight;
-  w.scrollTo(0, Math.round(mTop + 0.5 * mRec));
-  await esperar(800);
-  // La sección tiene que entrar ya en la primera fase, como en la maqueta.
-  w.scrollTo(0, Math.round(mTop + 0.12 * mRec));
-  await esperar(800);
-  comprobar('mano: entra en la primera píldora, Conversación',
-    Array.from(d.querySelectorAll('.hito')).findIndex((h) => h.classList.contains('is-activo')) === 0 &&
-    d.querySelector('.quehace__indice').textContent === '01',
-    'píldora activa e índice al entrar');
+  // Venir del final del documento a veces deja el primer scrollTo sin efecto,
+  // así que se comprueba dónde cayó y se reintenta.
+  const irMano = async (q) => {
+    const objetivo = Math.round(mTop + q * mRec);
+    for (let intento = 0; intento < 3; intento++) {
+      w.scrollTo(0, objetivo);
+      await esperar(intento === 0 ? 400 : 250);
+      if (Math.abs(w.scrollY - objetivo) < 4) break;
+    }
+    // y esperar a que la sección repinte con ese avance
+    const esperadoPct = Math.round(q * 100) + '%';
+    await esperarA(() => d.getElementById('quehaceProgreso').textContent === esperadoPct, 5000);
+  };
 
-  // La tarjeta crece con la fase. Con la mano de fondo todo va posicionado
-  // contra el panel, así que hay que comprobar que ninguna fase choca con el
-  // titular de arriba ni con las píldoras de abajo.
-  // Solapar en vertical no es chocar: en escritorio el titular y la tarjeta
-  // van en columnas distintas. Hay que cruzar los dos ejes.
-  const cruza = (a, b) => a.left < b.right && b.left < a.right &&
-                          a.top < b.bottom && b.top < a.bottom;
-  const choques = [];
-  for (let i = 0; i < 4; i++) {
-    w.scrollTo(0, Math.round(mTop + [0.12, 0.35, 0.58, 0.85][i] * mRec));
-    await esperar(750);
-    const ti = d.querySelector('.quehace__titular').getBoundingClientRect();
-    const ta = d.querySelector('.quehace__tarjeta').getBoundingClientRect();
-    const pi = d.querySelector('.hitos').getBoundingClientRect();
-    if (cruza(ta, ti)) choques.push(`fase ${i + 1}: pisa el titular`);
-    if (cruza(ta, pi)) choques.push(`fase ${i + 1}: pisa las píldoras`);
+  const tx = (sel) => {
+    const m = w.getComputedStyle(d.querySelector(sel)).transform;
+    const n = /matrix\(([^)]+)\)/.exec(m);
+    return n ? parseFloat(n[1].split(',')[4]) : 0;
+  };
+
+  const leerCintas = () => ({ t: tx('.quehace__titular'), f: tx('.quehace__fases'),
+    q: +(-mano.getBoundingClientRect().top / mRec).toFixed(2), y: w.scrollY });
+  await irMano(0.15);
+  const a = leerCintas();
+  await irMano(0.65);
+  const b = leerCintas();
+  comprobar('mano: las dos cintas cruzan en sentidos opuestos',
+    b.t < a.t - 50 && b.f > a.f + 50,
+    `titular ${Math.round(a.t)}→${Math.round(b.t)}  fases ${Math.round(a.f)}→${Math.round(b.f)}` +
+    `  ·  scroll ${a.y}→${b.y}, q ${a.q}→${b.q}`);
+
+  comprobar('mano: el porcentaje sigue al recorrido',
+    d.getElementById('quehaceProgreso').textContent === '65%',
+    d.getElementById('quehaceProgreso').textContent);
+
+  // La promesa de la sección: ninguna letra puede quedar encima de la mano.
+  // Se lee el píxel del lienzo justo debajo del centro de cada letra.
+  const lienzo = d.getElementById('mano');
+  const ctxMano = lienzo.getContext('2d');
+  const rl = lienzo.getBoundingClientRect();
+  const escX = lienzo.width / rl.width, escY = lienzo.height / rl.height;
+  const encima = [];
+  for (const q of [0.2, 0.4, 0.6, 0.8]) {
+    await irMano(q);
+    const px = ctxMano.getImageData(0, 0, lienzo.width, lienzo.height).data;
+    const letras = d.querySelectorAll('.let');
+    for (let i = 0; i < letras.length; i += 3) {
+      const r = letras[i].getBoundingClientRect();
+      if (!r.width) continue;
+      const cx = Math.round(((r.left + r.right) / 2 - rl.left) * escX);
+      const cy = Math.round(((r.top + r.bottom) / 2 - rl.top) * escY);
+      if (cx < 4 || cy < 4 || cx >= lienzo.width - 4 || cy >= lienzo.height - 4) continue;
+      // Se promedia un bloque: el campo de puntos es estocástico y un punto
+      // suelto debajo de una letra es grano, no mano. Sólo cuenta si la zona
+      // entera es maciza.
+      let suma = 0, n = 0;
+      for (let dy = -3; dy <= 3; dy++) for (let dx = -3; dx <= 3; dx++) {
+        suma += px[((cy + dy) * lienzo.width + (cx + dx)) * 4]; n++;
+      }
+      if (suma / n < 95) encima.push(q + ':' + letras[i].textContent);
+    }
   }
-  comprobar('mano: la tarjeta no choca con el titular ni con las píldoras',
-    choques.length === 0, choques.join('  ') || 'las cuatro fases con holgura');
+  comprobar('mano: ninguna letra queda sobre la mano',
+    encima.length === 0,
+    encima.length ? encima.slice(0, 6).join(' ') + ` (${encima.length})` : 'campo despejado en los 4 tramos');
 
-  w.scrollTo(0, Math.round(mTop + 0.5 * mRec));
-  await esperar(700);
-  const tarjeta = d.querySelector('.quehace__tarjeta');
-  comprobar('mano: la tarjeta y los hitos aparecen',
-    tarjeta.classList.contains('is-in') &&
-    d.querySelectorAll('.hito.is-activo').length === 1, '');
+  // Fuera del campo la letra tiene que volver a su sitio, no quedarse torcida.
+  await irMano(0.02);
+  const torcidas = Array.from(d.querySelectorAll('.let')).filter((e) => e.style.transform).length;
+  comprobar('mano: fuera del campo las letras vuelven a su sitio',
+    torcidas < 40, `${torcidas} con transformación al entrar`);
 
-  const titular = rect(d, '.quehace__titular');
-  comprobar('mano: el titular no se sale de la pantalla',
-    titular.x >= -1 && titular.x + titular.w <= VW + 1,
-    `${titular.x}…${titular.x + titular.w} de ${VW}`);
-
-  // un sizer sin su regla CSS dibuja el titular por duplicado
-  const sizer = d.querySelector('.quehace__frase-sizer');
-  comprobar('mano: el medidor del titular sigue oculto',
-    sizer && w.getComputedStyle(sizer).visibility === 'hidden', '');
+  // las píldoras siguen a la cinta
+  await irMano(0.12);
+  const p1 = Array.from(d.querySelectorAll('.hito')).findIndex((h) => h.classList.contains('is-activo'));
+  await irMano(0.9);
+  const p4 = Array.from(d.querySelectorAll('.hito')).findIndex((h) => h.classList.contains('is-activo'));
+  comprobar('mano: la píldora activa avanza con la cinta',
+    p1 === 0 && p4 === 3, `${p1 + 1} → ${p4 + 1}`);
 
   // ---- el interruptor de idioma no pisa nada -----------------------------
   // Va fijo en la esquina superior izquierda, que es donde varias secciones

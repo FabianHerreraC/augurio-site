@@ -25,6 +25,8 @@ un número del CSS no cuadra, se vuelve a medir sobre ellas.
 | problemas móvil (`.probs__marco`) | 984 × 1361 | `AuguriositeMobile.png` |
 | header escritorio | 2560 × 1721 | `header3.png` |
 | header móvil | 984 × 1586 | `header-mobile3.png` |
+| mano escritorio | 2560 × 1560 | `mano3.png` |
+| mano móvil | 984 × 1578 | `mano3-mobile.png` |
 
 La tipografía dentro de un marco va en `cqw` (proporcional al marco, no al
 viewport) con un piso en px: `max(12px, 2.03cqw)`. Sin el piso, la proporción
@@ -37,7 +39,7 @@ El progreso es `q = -rect.top / (offsetHeight - innerHeight)`, de 0 a 1.
 
 | Sección | Pista | Umbrales |
 |---|---|---|
-| mano | 520svh (340svh en móvil) | frase 0.02; hitos 0.06 / 0.31 / 0.54 / 0.77 |
+| mano | 620svh (480svh en móvil) | continuo: las cintas y el % siguen el avance |
 | gato | 680svh (560svh en móvil) | frases 0.08 / 0.21 / 0.33 / 0.45 / 0.57 / 0.70 |
 | problemas | automática, no por scroll | 6200 ms por frase, 900 ms de morfeo |
 
@@ -91,6 +93,46 @@ pantalla sin duplicar la instancia.
 ## 3. Acoples que no se ven en el código
 
 Esta es la sección importante. Todo lo de aquí ya rompió algo al menos una vez.
+
+### La mano: dos cintas y un campo que repele
+
+El titular cruza de derecha a izquierda y la cinta de fases de izquierda a
+derecha, las dos atadas al avance de la sección. El DOM de las fases va 1,2,3,4
+y se invierte con `flex-direction: row-reverse`: yendo hacia la derecha, la
+primera en entrar es la que queda más a la derecha, así que sin invertir se
+leerían al revés.
+
+Cada letra va en su propio `inline-block` para poder empujarla, agrupadas por
+palabra para que el salto de línea siga cayendo entre palabras.
+
+**El campo no es una elipse.** Una mano abierta no cabe en una: los dedos se
+salen, y una elipse que los cubra aparta el texto muchísimo más de lo necesario
+a la altura de la palma. Se calcula un campo de distancia con signo sobre una
+rejilla de 120 columnas, sacado de leer el propio lienzo —no de las maquetas:
+la mano cae donde la deje el encuadre, y un campo fijo se desalinea sin avisar.
+
+**El empuje va a pasitos, no de un salto.** Una letra bajo la palma tiene su
+salida más corta hacia arriba, pero en línea recta vuelve a caer sobre los
+dedos. Siguiendo el gradiente paso a paso rodea la silueta y sale por el hueco.
+Con el salto recto quedaban letras encima de la mano; con los pasos, ninguna.
+
+La máscara se engorda una celda antes de la transformada: la rejilla mide 12 px
+por celda y una letra cabe de sobra en el borde de una celda tenida por papel.
+
+### En la mano no se puede leer maquetación al pintar
+
+`pintar` no lee `offsetTop` ni `offsetLeft`: todo eso se cachea en
+`medirLetras`. Leer maquetación después de escribir transformaciones obliga al
+navegador a recalcularla para las mil y pico letras en cada cuadro.
+
+Una pasada completa sobre las 1143 letras cuesta 1.3 ms, y un cuadro real sólo
+toca las que están dentro del campo.
+
+### text-indent se hereda y lo aplica cada inline-block
+
+Las fases sangran la primera línea. Como cada letra es un `inline-block` —y por
+tanto un contenedor de bloque—, cada una aplicaba la sangría a su propia línea
+y acababa midiendo 6.5em de ancho. Hay que anularlo en `.pal` y `.let`.
 
 ### El header cambia de composición, no sólo de medidas
 

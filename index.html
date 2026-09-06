@@ -121,40 +121,41 @@
        se recorre, igual que en la sección del gato. -->
   <!-- El bloque alto es pista de scroll; la escena queda anclada mientras
        se recorre. Diagramación tomada de AuguriositeDesktop/Mobile. -->
+  <!-- La mano queda anclada y, al recorrer la sección, el titular cruza de
+       derecha a izquierda y las fases de izquierda a derecha. La mano tiene un
+       campo que repele y deforma las letras que se le acercan, así que ningún
+       texto llega a tocarla. -->
   <section class="quehace" id="quehace">
     <div class="quehace__fijo">
       <div class="quehace__marco">
         <canvas class="quehace__canvas" id="mano" aria-hidden="true"></canvas>
 
-        <p class="quehace__seccion" aria-hidden="true">QUE</p>
-        <p class="quehace__rotulo" aria-hidden="true">COMO LO HACEMOS</p>
+        <p class="quehace__progreso" id="quehaceProgreso" aria-hidden="true">0%</p>
 
-        <div class="quehace__titular">
-          <p class="quehace__frase" id="quehaceFrase">
-              <span class="sr-only">Usamos tecnología para orquestar conversaciones profundas que revelan conocimiento.</span>
-              <span class="quehace__frase-slot" aria-hidden="true">
-                <span class="quehace__frase-sizer">Usamos tecnología para orquestar conversaciones profundas que revelan conocimiento.</span>
-                <span class="quehace__frase-live"><span id="quehaceFraseTexto"></span><i class="quehace__caret" id="quehaceCaret"></i></span>
-              </span>
-            </p>
+        <!-- El titular: una sola línea que cruza el ancho. -->
+        <div class="quehace__pista quehace__pista--titular" aria-hidden="true">
+          <h2 class="quehace__titular" id="quehaceTitular"></h2>
         </div>
+        <p class="sr-only" id="quehaceTitularSR"></p>
 
-        <p class="quehace__indice" id="quehaceIndice" aria-hidden="true">01</p>
-
-        <div class="quehace__tarjeta">
-          <div class="hitos__panel" id="hitosPanel">
-            <p class="hito__desc" data-n="0"><b class="hito__clave">Conversación_</b>define las reglas del diálogo antes de construir nada: profundidad, contraste de ideas, ausencia de sesgo y capacidad de generar revelaciones reales, apoyada en cuestionamiento crítico y en imágenes o historias en vez de preguntas cerradas. Este diseño es el que luego le dicta al chatbot cómo comportarse.</p>
-            <p class="hito__desc" data-n="1"><b class="hito__clave">Captura_</b>es la implementación concreta de esas reglas: el chatbot que efectivamente conversa con las personas y guarda cada intercambio en Supabase, organizado por sesión. Su función es estrictamente recolectora; no interpreta ni analiza nada, solo asegura que la conversación quede registrada con fidelidad.</p>
-            <p class="hito__desc" data-n="2"><b class="hito__clave">Análisis_</b>toma esas conversaciones almacenadas y las procesa con IA para extraer insights estructurados: encuentra patrones, contrasta respuestas entre participantes y filtra ruido, hasta llegar a los hallazgos que explican qué es la organización, por qué es valiosa y en qué es distinta a otras.</p>
-            <p class="hito__desc" data-n="3"><b class="hito__clave">Visualización_</b>traduce esos insights en formatos gráficos predefinidos (nubes de puntos, grafos, mapas de calor, cronogramas, entre otros), usando specs ya probadas en proyectos anteriores en vez de generar cada vez un diseño desde cero. El resultado final es una sesión visual personalizada que la organización puede leer de un vistazo, cerrando el ciclo que empezó con una simple conversación de chat.</p>
+        <!-- Las fases: una cinta que viaja en sentido contrario. El orden del
+             DOM es 1,2,3,4 y se invierte visualmente con row-reverse, para que
+             la primera en entrar sea Conversación aunque la cinta vaya hacia
+             la derecha. -->
+        <div class="quehace__pista quehace__pista--fases">
+          <div class="quehace__fases" id="quehaceFases">
+            <p class="quehace__fase" data-n="0"></p>
+            <p class="quehace__fase" data-n="1"></p>
+            <p class="quehace__fase" data-n="2"></p>
+            <p class="quehace__fase" data-n="3"></p>
           </div>
         </div>
 
         <nav class="hitos" id="hitos" aria-label="Fases del proceso">
-            <button type="button" class="hito" data-n="0">Conversación</button>
-            <button type="button" class="hito" data-n="1">Captura</button>
-            <button type="button" class="hito" data-n="2">Análisis</button>
-            <button type="button" class="hito" data-n="3">Visualización</button>
+          <button type="button" class="hito" data-n="0">Conversación</button>
+          <button type="button" class="hito" data-n="1">Captura</button>
+          <button type="button" class="hito" data-n="2">Análisis</button>
+          <button type="button" class="hito" data-n="3">Visualización</button>
         </nav>
       </div>
     </div>

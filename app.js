@@ -392,8 +392,7 @@ function createDotField(canvas, opts) {
 })();
 
 /* ---- sección "qué hace": la mano, puntos oscuros sobre papel ----
-   La fuente (manosola.png) ya viene limpia: sin texto, sin guías y sin banda.
-   Antes había que reconstruir a mano lo que esos elementos tapaban. */
+   La fuente (manosola.png) ya viene limpia: sin texto, sin guías y sin banda. */
 (function () {
   const c = document.getElementById('mano');
   if (!c) return;
@@ -410,14 +409,12 @@ function createDotField(canvas, opts) {
     gamma: 0.75,
     wGamma: 1.75,
     maxScale: 1,
-    // En escritorio la mano cabe en su marco, que ya tiene su proporción. En
-    // móvil el lienzo es el panel entero, mucho más alto que ancho: sin subir
-    // el tope de acercamiento, 'cover' se queda corto y la mano cae en una
-    // franja en vez de llenar la pantalla como en la maqueta.
+    // En mano3 la mano se apoya en el rectángulo del centro y ocupa poco más
+    // de un tercio del ancho; en móvil llena la pantalla.
     zoomCap: () => (window.innerWidth <= 900 ? 3.4 : 1.35),
-    zoom: () => (window.innerWidth <= 900 ? 0.8 : 1),
-    panX: () => (window.innerWidth <= 900 ? -0.02 : 0),
-    panY: () => (window.innerWidth <= 900 ? 0.05 : 0),
+    zoom: () => (window.innerWidth <= 900 ? 0.74 : 0.58),
+    panX: () => (window.innerWidth <= 900 ? -0.02 : -0.026),
+    panY: () => (window.innerWidth <= 900 ? -0.16 : -0.062),
     pxPerDot: 6,
     maxDots: 320000,
     drift: 0.9,
@@ -425,200 +422,332 @@ function createDotField(canvas, opts) {
   });
 })();
 
+/* ---- sección "qué hace" ----
+   La mano se queda quieta y los textos la cruzan: el titular de derecha a
+   izquierda y la cinta de fases de izquierda a derecha, las dos atadas al
+   recorrido de la sección.
 
-/* ---- frase del header: "Conversaciones" fija, la segunda palabra se teclea ---- */
-(function () {
-  const word = document.getElementById('taglineWord');
-  const caret = document.getElementById('taglineCaret');
-  const slot = word && word.closest('.tagline__slot');
-  if (!word || !slot) return;
-
-  const WORDS = () => T().tagline.palabras;
-  const TYPE_MS = [55, 95], DEL_MS = [30, 46], HOLD_MS = 1700, GAP_MS = 260;
-
-  // El hueco reserva el ancho de la palabra más ancha para que la línea no se
-  // mueva al escribir. Hay que rehacerlo al cambiar de idioma: las palabras
-  // inglesas no miden lo mismo.
-  function sembrarMedidores() {
-    slot.querySelectorAll('.tagline__sizer').forEach((n) => n.remove());
-    WORDS().forEach(function (w) {
-      const s = document.createElement('span');
-      s.className = 'tagline__sizer';
-      s.setAttribute('aria-hidden', 'true');
-      s.textContent = w;
-      slot.insertBefore(s, slot.firstChild);
-    });
-  }
-  sembrarMedidores();
-  document.addEventListener('augurio:idioma', sembrarMedidores);
-
-  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    word.textContent = WORDS()[0];
-    document.addEventListener('augurio:idioma', () => { word.textContent = WORDS()[0]; });
-    return;
-  }
-
-  const rand = (r) => r[0] + Math.random() * (r[1] - r[0]);
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const idle = (on) => caret && caret.classList.toggle('is-idle', on);
-  const awake = () => document.hidden
-    ? new Promise((res) => document.addEventListener('visibilitychange', function h() {
-        if (document.hidden) return;
-        document.removeEventListener('visibilitychange', h); res();
-      }))
-    : Promise.resolve();
-
-  (async function run() {
-    let i = 0;
-    for (;;) {
-      const w = WORDS()[i];
-      idle(false);
-      for (let c = 1; c <= w.length; c++) { word.textContent = w.slice(0, c); await sleep(rand(TYPE_MS)); }
-      idle(true);
-      await sleep(HOLD_MS);
-      await awake();
-      idle(false);
-      for (let c = w.length - 1; c >= 0; c--) { word.textContent = w.slice(0, c); await sleep(rand(DEL_MS)); }
-      idle(true);
-      await sleep(GAP_MS);
-      i = (i + 1) % WORDS().length;
-    }
-  })();
-})();
-
-/* ---- sección "qué hace": la escena queda anclada y se recorre por dentro ----
-   Primero se teclea la frase, después se despliegan las guías de izquierda a
-   derecha, y al final la recta del tiempo va pasando por las cuatro fases.
-   Reversible: al salir del viewport se repliega y vuelve a jugarse. */
+   La mano lleva un campo elíptico que repele las letras: cada una se aparta
+   en la dirección que la aleja del centro, se encoge y se gira un poco, tanto
+   más cuanto más cerca esté. Ninguna llega a tocarla. */
 (function () {
   const sec = document.getElementById('quehace');
-  const frase = document.getElementById('quehaceFrase');
-  const tarjeta = sec.querySelector('.quehace__tarjeta');
-  if (!sec || !frase || !tarjeta) return;
-
-  const indice = document.getElementById('quehaceIndice');
-  const hitos = Array.from(sec.querySelectorAll('.hito'));
-  const descs = Array.from(sec.querySelectorAll('.hito__desc'));
-  const panel = document.getElementById('hitosPanel');
-  const barra = document.getElementById('hitos');
-
-  const fraseTexto = document.getElementById('quehaceFraseTexto');
-  const fraseCaret = document.getElementById('quehaceCaret');
-  // Se teclea leyendo el medidor, que es quien lleva el texto completo. Se
-  // relee en cada tecleo para que el cambio de idioma entre solo.
-  const LETRAS = () => sec.querySelector('.quehace__frase-sizer').textContent;
+  const marco = sec && sec.querySelector('.quehace__marco');
+  const titular = document.getElementById('quehaceTitular');
+  const fases = document.getElementById('quehaceFases');
+  const progreso = document.getElementById('quehaceProgreso');
+  const hitos = Array.from(document.querySelectorAll('.hito'));
+  if (!sec || !marco || !titular || !fases) return;
 
   const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (reducido) {
-    frase.classList.add('is-in');
-    if (fraseTexto) fraseTexto.textContent = LETRAS();
-    if (tarjeta) tarjeta.classList.add('is-in');
-    barra && barra.classList.add('is-in');
-    hitos.forEach((h) => h.classList.add('is-activo'));
-    descs.forEach((d) => d.classList.add('is-in'));
-    return;
-  }
 
-  // tecleo de la frase, cancelable si la sección se va antes de terminar
-  let token = 0;
-  function tipear(on) {
-    if (!fraseTexto) return;
-    const mio = ++token;
-    if (!on) {
-      fraseTexto.textContent = '';
-      if (fraseCaret) fraseCaret.classList.remove('is-on', 'is-idle');
-      return;
+  // El campo se saca de la propia mano, leyendo el lienzo. Ponerlo a mano no
+  // sirve: la mano cae donde la deje el encuadre —que cambia entre escritorio
+  // y móvil— y un campo fijo se desalinea sin que nada avise.
+  //
+  // Y no es una elipse. Una mano abierta no cabe en una: los dedos se salen,
+  // y una elipse que los cubra aparta el texto muchísimo más de lo necesario
+  // a la altura de la palma. Se calcula un campo de distancia sobre una
+  // rejilla: cada celda guarda a qué distancia está de la mano, con signo
+  // (negativo dentro). El gradiente de ese campo apunta siempre hacia afuera,
+  // así que empujar por él aparta cada letra por el camino más corto y el
+  // texto acaba abrazando la silueta.
+  const REJILLA = 120;     // columnas de la rejilla; las filas salen del alto
+  const ALCANCE = 0.068;   // radio de influencia, en fracción del ancho
+  const EMPUJE = 1.0;      // 1 deja la letra justo en el borde del alcance
+  const ENCOGE = 0.3;      // cuánto se encoge la letra pegada a la mano
+  const GIRO = 20;         // grados de giro máximo
+
+  let campo = null;        // { gw, gh, s } con s = distancia con signo, en celdas
+
+  // Transformada de distancia por dos pasadas (chamfer 3-4).
+  function distancia(mascara, gw, gh, dentro) {
+    const INF = 1e9;
+    const D = new Float32Array(gw * gh);
+    for (let i = 0; i < D.length; i++) D[i] = (mascara[i] === dentro) ? 0 : INF;
+    const paso = (x, y, dx, dy, coste) => {
+      const nx = x + dx, ny = y + dy;
+      if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) return INF;
+      return D[ny * gw + nx] + coste;
+    };
+    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+      const i = y * gw + x;
+      if (D[i] === 0) continue;
+      D[i] = Math.min(D[i], paso(x,y,-1,0,3), paso(x,y,0,-1,3), paso(x,y,-1,-1,4), paso(x,y,1,-1,4));
     }
-    if (fraseCaret) { fraseCaret.classList.add('is-on'); fraseCaret.classList.remove('is-idle'); }
-    let i = 0;
-    (function paso() {
-      if (mio !== token) return;
-      const txt = LETRAS();
-      fraseTexto.textContent = txt.slice(0, ++i);
-      if (i < txt.length) { setTimeout(paso, 20 + Math.random() * 26); return; }
-      if (!fraseCaret) return;
-      fraseCaret.classList.add('is-idle');
-      setTimeout(function () {
-        if (mio !== token) return;
-        fraseCaret.classList.remove('is-on', 'is-idle');
-      }, 1400);
-    })();
+    for (let y = gh - 1; y >= 0; y--) for (let x = gw - 1; x >= 0; x--) {
+      const i = y * gw + x;
+      if (D[i] === 0) continue;
+      D[i] = Math.min(D[i], paso(x,y,1,0,3), paso(x,y,0,1,3), paso(x,y,1,1,4), paso(x,y,-1,1,4));
+    }
+    for (let i = 0; i < D.length; i++) D[i] /= 3;   // de coste chamfer a celdas
+    return D;
   }
 
-  // avance: frase, las dos guías de la izquierda, las dos de la derecha,
-  // y después las cuatro fases
-  const EN_FRASE = 0.02;
-  // La sección arranca ya en la primera fase: la maqueta la muestra con
-  // "Conversacion" activa y el índice en 01 nada más entrar. Las otras tres
-  // se reparten el resto del recorrido.
-  const EN_HITO = [0.06, 0.31, 0.54, 0.77];
+  function medirCampo() {
+    const c = document.getElementById('mano');
+    if (!c || !c.width || !c.height) return false;
+    let im;
+    try { im = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; }
+    catch (e) { return false; }
+    const W = c.width, H = c.height;
+    const gw = REJILLA, gh = Math.max(8, Math.round(REJILLA * H / W));
+    let mascara = new Uint8Array(gw * gh);
+    let tinta = 0;
+    for (let gy = 0; gy < gh; gy++) {
+      const y = Math.min(H - 1, Math.round((gy + 0.5) * H / gh));
+      for (let gx = 0; gx < gw; gx++) {
+        const x = Math.min(W - 1, Math.round((gx + 0.5) * W / gw));
+        // se promedia un bloque: un punto suelto del grano no es mano
+        let suma = 0, n = 0;
+        for (let k = -2; k <= 2; k++) {
+          const yy = Math.min(H - 1, Math.max(0, y + k * 2));
+          for (let j = -2; j <= 2; j++) {
+            const xx = Math.min(W - 1, Math.max(0, x + j * 2));
+            suma += im[(yy * W + xx) * 4]; n++;
+          }
+        }
+        // 195 sobre un papel de 243: entra tambien el degradado de las yemas,
+        // donde la mano se deshilacha pero sigue siendo mano
+        if (suma / n < 195) { mascara[gy * gw + gx] = 1; tinta++; }
+      }
+    }
+    if (tinta < 20) return false;      // aún no ha pintado
 
-  let puestaFrase = null, hitoActual = -2;
+    // Se engorda la máscara una celda. Sin esto una letra puede caer en el
+    // borde de una celda tenida por papel y quedar encima de la mano: la
+    // rejilla mide 12 px por celda y una letra cabe de sobra ahí dentro.
+    const gorda = mascara.slice();
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      if (mascara[gy * gw + gx]) continue;
+      if ((gx > 0 && mascara[gy * gw + gx - 1]) ||
+          (gx < gw - 1 && mascara[gy * gw + gx + 1]) ||
+          (gy > 0 && mascara[(gy - 1) * gw + gx]) ||
+          (gy < gh - 1 && mascara[(gy + 1) * gw + gx])) gorda[gy * gw + gx] = 1;
+    }
+    mascara = gorda;
 
-  function altoPanel() {
-    if (!panel) return;
-    panel.style.height = hitoActual >= 0
-      ? descs[hitoActual].getBoundingClientRect().height + 'px'
-      : '0px';
+    const fuera = distancia(mascara, gw, gh, 1);   // distancia a la mano
+    const dentro = distancia(mascara, gw, gh, 0);  // distancia al papel
+    const s = new Float32Array(gw * gh);
+    for (let i = 0; i < s.length; i++) s[i] = mascara[i] ? -dentro[i] : fuera[i];
+    campo = { gw, gh, s };
+    return true;
   }
 
-  function verHito(n) {
-    if (n === hitoActual) return;
-    hitoActual = n;
-    hitos.forEach((h, i) => h.classList.toggle('is-activo', i === n));
-    descs.forEach((d, i) => d.classList.toggle('is-in', i === n));
-    if (tarjeta) tarjeta.classList.toggle('is-in', n >= 0);
-    if (indice) indice.textContent = '0' + (Math.max(0, n) + 1);
-    altoPanel();
+  /* ---- partir en letras ----
+     Cada palabra va en su propio inline-block para que el salto de línea siga
+     cayendo entre palabras, y dentro cada letra en el suyo para poder
+     empujarla por separado. */
+  function partir(nodo, texto) {
+    nodo.textContent = '';
+    const frag = document.createDocumentFragment();
+    texto.split(/(\s+)/).forEach(function (trozo) {
+      if (!trozo) return;
+      if (/^\s+$/.test(trozo)) { frag.appendChild(document.createTextNode(trozo)); return; }
+      const pal = document.createElement('span');
+      pal.className = 'pal';
+      for (const ch of trozo) {
+        const l = document.createElement('span');
+        l.className = 'let';
+        l.textContent = ch;
+        pal.appendChild(l);
+      }
+      frag.appendChild(pal);
+    });
+    nodo.appendChild(frag);
   }
 
-  let ticking = false;
-  function medir() {
-    ticking = false;
+  // letras con su posición en reposo, medida una vez por maquetación
+  let letras = [];          // { el, cinta, x, y }
+  let anchoTitular = 0, anchoFases = 0, vw = 0, vh = 0;
+  let marcoCaja = { left: 0, top: 0, width: 0, height: 0 };
+  // Desplazamientos de cada pista y centros de cada fase. Se guardan aquí y no
+  // se leen al pintar: leer offsetTop después de escribir transformaciones
+  // obliga al navegador a recalcular la maquetación de las mil y pico letras,
+  // y el cuadro pasa de milisegundos a casi un segundo.
+  let desT = 0, desF = 0, centrosFase = [];
+
+  function escribir() {
+    const t = T().mano;
+    partir(titular, t.titular);
+    const sr = document.getElementById('quehaceTitularSR');
+    if (sr) sr.textContent = t.titular;
+    Array.from(fases.querySelectorAll('.quehace__fase')).forEach(function (p, i) {
+      const par = t.fases[i];
+      if (par) partir(p, par[0] + ' ' + par[1]);
+    });
+    hitos.forEach((h, i) => { if (t.pildoras[i]) h.textContent = t.pildoras[i]; });
+  }
+
+  function medirLetras() {
+    const rm = marco.getBoundingClientRect();
+    marcoCaja = { left: rm.left, top: rm.top, width: rm.width, height: rm.height };
+    vw = rm.width; vh = rm.height;
+    anchoTitular = titular.scrollWidth;
+    anchoFases = fases.scrollWidth;
+
+    desT = titular.offsetTop + titular.parentElement.offsetTop;
+    desF = fases.offsetTop + fases.parentElement.offsetTop;
+    centrosFase = Array.from(fases.querySelectorAll('.quehace__fase'))
+      .map((c) => c.offsetLeft + c.offsetWidth / 2);
+
+    letras = [];
+    [[titular, 'titular'], [fases, 'fases']].forEach(function ([raiz, cinta]) {
+      const base = raiz.getBoundingClientRect();
+      raiz.querySelectorAll('.let').forEach(function (el) {
+        const r = el.getBoundingClientRect();
+        letras.push({ el, cinta,
+          // posición en reposo, relativa al origen sin trasladar de su cinta
+          x: r.left - base.left + r.width / 2,
+          y: r.top - base.top + r.height / 2,
+          puesta: false });
+      });
+    });
+  }
+
+  /* ---- recorrido ---- */
+  function avance() {
     const r = sec.getBoundingClientRect();
-    const vh = window.innerHeight || document.documentElement.clientHeight;
-    // Con la sección anclada el avance se mide sobre su recorrido. Si la
-    // sección entra entera en la pantalla (móvil, sin anclaje) ese recorrido
-    // es cero o negativo y nada se revelaría: ahí se mide por su entrada.
-    const recorrido = sec.offsetHeight - vh;
-    const q = recorrido > 40
-      ? Math.max(0, Math.min(1, -r.top / recorrido))
-      : Math.max(0, Math.min(1, (vh * 0.85 - r.top) / (vh * 0.7)));
+    const alto = window.innerHeight || document.documentElement.clientHeight;
+    const recorrido = Math.max(1, sec.offsetHeight - alto);
+    return Math.max(0, Math.min(1, -r.top / recorrido));
+  }
 
-    const onFrase = q >= EN_FRASE;
-    if (onFrase !== puestaFrase) {
-      puestaFrase = onFrase;
-      frase.classList.toggle('is-in', onFrase);
-      onFrase ? setTimeout(() => puestaFrase && tipear(true), 280) : tipear(false);
+  // El titular entra por la derecha y sale por la izquierda; la cinta de
+  // fases hace lo contrario.
+  const txTitular = (q) => vw - q * (vw + anchoTitular);
+  const txFases = (q) => -anchoFases + q * (anchoFases + vw);
+
+  function pintar(q) {
+    const tT = txTitular(q), tF = txFases(q);
+    titular.style.transform = 'translate3d(' + tT.toFixed(1) + 'px,0,0)';
+    fases.style.transform = 'translate3d(' + tF.toFixed(1) + 'px,0,0)';
+
+    if (!campo) { if (progreso) progreso.textContent = Math.round(q * 100) + '%'; return; }
+    const { gw, gh, s: campoS } = campo;
+    const alcance = ALCANCE * vw;              // en px
+    const celda = vw / gw;                     // px por celda
+    const alcanceC = alcance / celda;          // en celdas
+
+    const leer = (gx, gy) => campoS[Math.min(gh - 1, Math.max(0, gy)) * gw +
+                                    Math.min(gw - 1, Math.max(0, gx))];
+
+    for (let i = 0; i < letras.length; i++) {
+      const L = letras[i];
+      const esT = L.cinta === 'titular';
+      const x = L.x + (esT ? tT : tF);
+      const y = L.y + (esT ? desT : desF);
+
+      const gx0 = Math.round(x / vw * gw), gy0 = Math.round(y / vh * gh);
+      if (gx0 < -2 || gy0 < -2 || gx0 > gw + 2 || gy0 > gh + 2) {
+        if (L.puesta) { L.el.style.transform = ''; L.puesta = false; }
+        continue;
+      }
+      const d0 = leer(gx0, gy0);
+      if (d0 >= alcanceC) {
+        if (L.puesta) { L.el.style.transform = ''; L.puesta = false; }
+        continue;
+      }
+
+      // Se avanza por el gradiente a pasitos en vez de dar un salto recto.
+      // Una letra bajo la palma tiene su salida más corta hacia arriba, pero
+      // en línea recta vuelve a caer sobre los dedos: siguiendo el campo paso
+      // a paso, rodea la silueta y sale por el hueco.
+      let sx = x, sy = y, pasos = 0;
+      while (pasos < 26) {
+        const cgx = Math.round(sx / vw * gw), cgy = Math.round(sy / vh * gh);
+        if (leer(cgx, cgy) >= alcanceC) break;
+        let ux = leer(cgx + 1, cgy) - leer(cgx - 1, cgy);
+        let uy = leer(cgx, cgy + 1) - leer(cgx, cgy - 1);
+        const mod = Math.hypot(ux, uy);
+        if (mod < 0.0001) { uy = -1; ux = 0; } else { ux /= mod; uy /= mod; }
+        sx += ux * celda; sy += uy * celda;
+        pasos++;
+      }
+
+      const desX = sx - x, desY = sy - y;
+      // la deformación va con lo hondo que estuviera, no con lo que viajó
+      const f = Math.min(1, (alcanceC - d0) / alcanceC);
+      const g = f * f;
+      const esc = 1 - g * ENCOGE;
+      const gir = (desX >= 0 ? 1 : -1) * g * GIRO;
+      L.el.style.transform =
+        'translate3d(' + desX.toFixed(1) + 'px,' + desY.toFixed(1) + 'px,0) rotate(' +
+        gir.toFixed(1) + 'deg) scale(' + esc.toFixed(3) + ')';
+      L.puesta = true;
     }
 
-    let n = -1;
-    for (let i = 0; i < EN_HITO.length; i++) if (q >= EN_HITO[i]) n = i;
-    // la recta aparece un poco antes que su primera fase
-    if (barra) barra.classList.toggle('is-in', q >= EN_HITO[0] - 0.05);
-    verHito(n);
+    if (progreso) progreso.textContent = Math.round(q * 100) + '%';
+
+    // la fase activa es la que tiene su centro más cerca del centro del marco
+    let cerca = 0, mejor = Infinity;
+    for (let i = 0; i < centrosFase.length; i++) {
+      const dist = Math.abs(centrosFase[i] + tF - vw / 2);
+      if (dist < mejor) { mejor = dist; cerca = i; }
+    }
+    hitos.forEach((h, i) => h.classList.toggle('is-activo', i === cerca));
   }
-  // mismo cerrojo con caducidad que en la sección del gato: un cuadro
-  // descartado no puede dejar la sección sorda al scroll
-  let pedido = 0;
-  function onScroll() {
+
+  /* ---- ir a una fase al pulsar su píldora ---- */
+  hitos.forEach(function (h, i) {
+    h.addEventListener('click', function () {
+      const centro = centrosFase[i];
+      if (centro === undefined) return;
+      // q tal que el centro de la fase caiga en el centro del marco
+      const q = (vw / 2 - centro + anchoFases) / (anchoFases + vw);
+      const alto = window.innerHeight || document.documentElement.clientHeight;
+      const recorrido = sec.offsetHeight - alto;
+      const arriba = sec.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: Math.round(arriba + Math.max(0, Math.min(1, q)) * recorrido),
+        behavior: 'smooth' });
+    });
+  });
+
+  /* ---- bucle ---- */
+  // El cerrojo caduca. Si el navegador descarta el cuadro donde se libera
+  // —pestaña de fondo, o un tirón de scroll— quedaría cerrado para siempre y
+  // la sección dejaría de responder sin dar ningún error. Le pasó al gato y
+  // está anotado en el spec; aquí también hace falta.
+  let pedido = false, cuando = 0;
+  function alScroll() {
     const ahora = performance.now();
-    if (ticking && ahora - pedido < 300) return;
-    ticking = true; pedido = ahora;
-    requestAnimationFrame(medir);
+    if (pedido && ahora - cuando < 300) return;
+    pedido = true; cuando = ahora;
+    requestAnimationFrame(function () { pedido = false; pintar(avance()); });
   }
 
-  // los hitos también son botones
-  hitos.forEach(function (b, n) {
-    b.addEventListener('click', function () { verHito(n); });
+  function rehacer() {
+    medirLetras();
+    medirCampo();
+    pintar(avance());
+  }
+
+  // La mano tarda en pintarse: se reintenta hasta que el lienzo tenga tinta.
+  (function esperarMano(intentos) {
+    if (medirCampo()) { pintar(avance()); return; }
+    if (intentos > 0) setTimeout(() => esperarMano(intentos - 1), 250);
+  })(40);
+
+  escribir();
+  // las medidas necesitan la tipografía ya cargada, o las letras salen
+  // colocadas contra una fuente que no es la definitiva
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(rehacer);
+  else rehacer();
+  rehacer();
+
+  document.addEventListener('augurio:idioma', function () { escribir(); rehacer(); });
+  window.addEventListener('scroll', alScroll, { passive: true });
+  let temp = 0;
+  window.addEventListener('resize', function () {
+    clearTimeout(temp); temp = setTimeout(rehacer, 160);
   });
 
-  window.addEventListener('scroll', onScroll, { passive: true });
-  window.addEventListener('resize', function () { onScroll(); altoPanel(); });
-  document.addEventListener('augurio:idioma', function () {
-    hitoActual = -2; puestaFrase = null; onScroll();
-  });
-  medir();
+  if (reducido) {
+    // sin movimiento: se deja la cinta a media altura del recorrido
+    pintar(0.5);
+    window.removeEventListener('scroll', alScroll);
+  }
 })();
 
 /* ---- sección del gato ----
@@ -1157,12 +1286,9 @@ function createDifuminado(canvas, opts) {
 
     ponerConClave(Array.from(document.querySelectorAll('.gato__frase')), t.gato.frases, 'gato__clave');
 
-    poner('.quehace__seccion', t.mano.seccion);
-    poner('.quehace__rotulo', t.mano.rotulo);
-    poner('.quehace__frase .sr-only', t.mano.titular);
-    poner('.quehace__frase-sizer', t.mano.titular);
-    ponerConClave(Array.from(document.querySelectorAll('.hito__desc')), t.mano.fases, 'hito__clave');
-    document.querySelectorAll('.hito').forEach((h, i) => { h.textContent = t.mano.pildoras[i]; });
+    // El titular, las fases y las píldoras de la mano los reescribe su propio
+    // módulo al recibir 'augurio:idioma': tiene que volver a partirlos en
+    // letras y a medirlas, no basta con cambiar el texto.
 
     poner('.probs__rotulo', t.probs.rotulo);
     poner('.probs__titulo', t.probs.titulo);
