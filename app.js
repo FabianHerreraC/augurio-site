@@ -32,7 +32,7 @@ const TEXTOS = {
     mano: {
       seccion: 'QUE',
       rotulo: 'COMO LO HACEMOS',
-      titular: 'Usamos tecnología para orquestar conversaciones profundas que revelan conocimiento.',
+      titular: 'Usamos tecnología para orquestar conversaciones reveladoras.',
       pildoras: ['Conversación', 'Captura', 'Análisis', 'Visualización'],
       fases: [
         ['Conversación_', 'Antes de construir nada, se definen las reglas de un buen diálogo (profundidad, contraste, ausencia de sesgo y capacidad de revelación), apoyadas en cuestionamiento crítico e imágenes evocadoras en vez de preguntas cerradas.'],
@@ -89,7 +89,7 @@ const TEXTOS = {
     mano: {
       seccion: 'WHAT',
       rotulo: 'HOW WE DO IT',
-      titular: 'We use technology to orchestrate deep conversations that reveal knowledge.',
+      titular: 'We use technology to orchestrate revealing conversations.',
       pildoras: ['Conversation', 'Capture', 'Analysis', 'Visualization'],
       fases: [
         ['Conversation_', 'Before anything is built, the rules of a good dialogue are set out — depth, contrast, absence of bias and the capacity to reveal — grounded in critical questioning and evocative images rather than closed questions.'],
