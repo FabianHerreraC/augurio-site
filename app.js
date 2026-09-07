@@ -149,6 +149,7 @@ function createDotField(canvas, opts) {
     panX: 0, panY: 0,   // corrimiento, en fracciones del lienzo
     zoomCap: 1.35,      // tope de acercamiento respecto del encuadre "contain"
     srcTop: 0,          // fracción superior de la fuente que se descarta
+    onListo: null,      // se llama una vez, tras el primer pintado
     prepare: null       // fn(ctx, w, h) para limpiar la fuente antes de muestrear
   }, opts || {});
 
@@ -162,7 +163,7 @@ function createDotField(canvas, opts) {
   let W = 0, H = 0, clean = null, count = 0;
   let px, py, pv, ph1, ph2, sp1, sp2, amp, dsc;
   let buf32 = null, imageData = null, lastIdx = null, lastN = 0;
-  let raf = 0, resizeTimer = 0, running = false;
+  let raf = 0, resizeTimer = 0, running = false, avisado = false;
 
   // Varias opciones pueden ser función para depender del ancho de pantalla:
   // el encuadre no es el mismo en escritorio que en móvil.
@@ -349,6 +350,7 @@ function createDotField(canvas, opts) {
     if (!clean) return;
     buildField();
     paint(reduced ? null : 0);
+    if (!avisado) { avisado = true; if (o.onListo) o.onListo(); }
   }
 
   const image = new Image();
@@ -382,13 +384,23 @@ function createDotField(canvas, opts) {
 (function () {
   const c = document.getElementById('dust');
   if (!c) return;
+  // El contenido del header espera a que el fondo esté pintado: primero
+  // aparecen los puntos y encima entra lo demás. La marca va en <html> para
+  // que también la vea el interruptor de idioma, que cuelga del body.
+  const listo = () => document.documentElement.classList.add('is-listo');
+
   createDotField(c, {
     src: 'headerA.png',
     paper: 10,
-    zoomCap: 1.35
+    zoomCap: 1.35,
     // El encuadre se deja como estaba: header3.png trae las figuras al mismo
     // tamaño y en el mismo sitio, lo que cambia es lo que va encima.
+    onListo: listo
   });
+
+  // Red de seguridad: si la imagen no llega —sin red, o un error— el header no
+  // puede quedarse en blanco para siempre.
+  setTimeout(listo, 3500);
 })();
 
 

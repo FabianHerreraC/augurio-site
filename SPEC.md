@@ -159,10 +159,26 @@ toma el mismo `top` y la misma altura que el punto —`--bolita`—, así que lo
 centros coinciden solos; en escritorio los tres se cuelgan del 2.5% del alto
 con `translateY(-50%)`.
 
+### El header espera a su fondo
+
+El contenido del header —y el interruptor de idioma— arrancan en opacidad 0 y
+entran cuando el campo de puntos ha pintado por primera vez. El motor avisa con
+`onListo`, y el header pone `is-listo` en `<html>`, que es donde puede verlo
+también el interruptor, que cuelga del `body`.
+
+Con un plazo de seguridad de 3.5 s: si la imagen no llegara, el header no puede
+quedarse en blanco para siempre. La sonda comprueba que la marca acabe puesta,
+porque ese fallo no daría ningún error.
+
+Medido: el fondo pinta a los ~300 ms, el contenido entra sobre el segundo 1 y
+la cita completa su fundido hacia el 7.
+
 ### El testimonio del header entra con retardo
 
 `.header__cita` arranca en opacidad 0 y sube con un `animation` de 4.5 s y dos
-segundos de retardo. Va en CSS y no en JS porque no depende de nada más que de
+segundos de retardo, que cuentan **desde que el header se revela** y no desde
+que carga la página: si el fondo tarda, la cita no puede haberse consumido su
+entrada mientras estaba oculta. Por eso la animación cuelga de `.is-listo`. Va en CSS y no en JS porque no depende de nada más que de
 que la página se pinte. El riesgo es que un cambio lo deje clavado en 0 sin
 dar ningún error, así que la sonda espera a que el fundido termine en vez de
 medir y seguir.

@@ -172,6 +172,14 @@ async function correr() {
       Array.from(d.querySelectorAll('.header__enlace')).every((e) => e.textContent.trim()), '');
   }
 
+  // El contenido del header espera al fondo. Lo que hay que garantizar es que
+  // acabe visible: si la marca no llegara, el header se quedaría en blanco y
+  // no habría ningún error que lo delatara.
+  comprobar('header: el contenido aparece tras el fondo',
+    d.documentElement.classList.contains('is-listo') &&
+    +w.getComputedStyle(d.querySelector('.header__inner')).opacity > 0.95,
+    'marca puesta y contenido a plena opacidad');
+
   // La palabra de la frase se teclea sola. Es un módulo sin rastro en el DOM
   // en reposo: si desaparece, la frase se queda muda y nada lo delata. Ya pasó
   // una vez, borrado por un reemplazo de bloque.
