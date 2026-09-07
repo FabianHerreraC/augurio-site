@@ -35,10 +35,10 @@ const TEXTOS = {
       titular: 'Usamos tecnología para orquestar conversaciones profundas que revelan conocimiento.',
       pildoras: ['Conversación', 'Captura', 'Análisis', 'Visualización'],
       fases: [
-        ['Conversación_', 'define las reglas del diálogo antes de construir nada: profundidad, contraste de ideas, ausencia de sesgo y capacidad de generar revelaciones reales, apoyada en cuestionamiento crítico y en imágenes o historias en vez de preguntas cerradas. Este diseño es el que luego le dicta al chatbot cómo comportarse.'],
-        ['Captura_', 'es la implementación concreta de esas reglas: el chatbot que efectivamente conversa con las personas y guarda cada intercambio en Supabase, organizado por sesión. Su función es estrictamente recolectora; no interpreta ni analiza nada, solo asegura que la conversación quede registrada con fidelidad.'],
-        ['Análisis_', 'toma esas conversaciones almacenadas y las procesa con IA para extraer insights estructurados: encuentra patrones, contrasta respuestas entre participantes y filtra ruido, hasta llegar a los hallazgos que explican qué es la organización, por qué es valiosa y en qué es distinta a otras.'],
-        ['Visualización_', 'traduce esos insights en formatos gráficos predefinidos (nubes de puntos, grafos, mapas de calor, cronogramas, entre otros), usando specs ya probadas en proyectos anteriores en vez de generar cada vez un diseño desde cero. El resultado final es una sesión visual personalizada que la organización puede leer de un vistazo, cerrando el ciclo que empezó con una simple conversación de chat.']
+        ['Conversación_', 'Antes de construir nada, se definen las reglas de un buen diálogo (profundidad, contraste, ausencia de sesgo y capacidad de revelación), apoyadas en cuestionamiento crítico e imágenes evocadoras en vez de preguntas cerradas.'],
+        ['Captura_', 'Las personas tienen una conversación colectiva asistida por IA, siguiendo esas reglas, y cada intercambio queda guardado en una base de datos, organizado por sesión.'],
+        ['Análisis_', 'Las conversaciones almacenadas se procesan con IA para encontrar patrones y contrastar respuestas entre participantes. De ahí surgen los hallazgos que explican qué es la organización y qué la hace valiosa y distinta.'],
+        ['Visualización_', 'Esos hallazgos se traducen en formatos gráficos predefinidos, como grafos, mapas de calor o cronogramas, usando specs ya probadas en proyectos anteriores. El resultado es una sesión visual personalizada que la organización puede leer de un vistazo.']
       ]
     },
     probs: {
@@ -92,10 +92,10 @@ const TEXTOS = {
       titular: 'We use technology to orchestrate deep conversations that reveal knowledge.',
       pildoras: ['Conversation', 'Capture', 'Analysis', 'Visualization'],
       fases: [
-        ['Conversation_', 'sets the rules of the dialogue before anything is built: depth, contrast of ideas, absence of bias and the capacity to produce real revelations, grounded in critical questioning and in images or stories rather than closed questions. That design is what later tells the chatbot how to behave.'],
-        ['Capture_', 'is the concrete implementation of those rules: the chatbot that actually converses with people and stores every exchange in Supabase, organized by session. Its role is strictly to collect; it interprets and analyzes nothing, it only makes sure the conversation is recorded faithfully.'],
-        ['Analysis_', 'takes those stored conversations and processes them with AI to extract structured insights: it finds patterns, contrasts answers across participants and filters out noise, until it reaches the findings that explain what the organization is, why it is valuable and how it differs from others.'],
-        ['Visualization_', 'translates those insights into predefined graphic formats (dot clouds, graphs, heat maps, timelines, among others), using specs already proven in earlier projects instead of designing from scratch every time. The final result is a tailored visual session the organization can read at a glance, closing the loop that began with a simple chat conversation.']
+        ['Conversation_', 'Before anything is built, the rules of a good dialogue are set out — depth, contrast, absence of bias and the capacity to reveal — grounded in critical questioning and evocative images rather than closed questions.'],
+        ['Capture_', 'People hold a collective conversation assisted by AI, following those rules, and every exchange is stored in a database, organized by session.'],
+        ['Analysis_', 'The stored conversations are processed with AI to find patterns and contrast answers across participants. From there come the findings that explain what the organization is and what makes it valuable and distinct.'],
+        ['Visualization_', 'Those findings are translated into predefined graphic formats — graphs, heat maps or timelines — using specs already proven in earlier projects. The result is a tailored visual session the organization can read at a glance.']
       ]
     },
     probs: {
@@ -648,7 +648,19 @@ function createDotField(canvas, opts) {
     if (sr) sr.textContent = t.titular;
     Array.from(fases.querySelectorAll('.quehace__fase')).forEach(function (p, i) {
       const par = t.fases[i];
-      if (par) partir(p, par[0] + ' ' + par[1]);
+      if (!par) return;
+      // La clave va destacada, como en la maqueta. Se parte aparte para que
+      // sus letras lleven su propio cuerpo pero sigan siendo letras: el campo
+      // las busca con querySelectorAll('.let'), a cualquier profundidad.
+      p.textContent = '';
+      const clave = document.createElement('b');
+      clave.className = 'quehace__clave';
+      partir(clave, par[0]);
+      p.appendChild(clave);
+      p.appendChild(document.createTextNode(' '));
+      const resto = document.createElement('span');
+      partir(resto, par[1]);
+      p.appendChild(resto);
     });
     hitos.forEach((h, i) => { if (t.pildoras[i]) h.textContent = t.pildoras[i]; });
   }
