@@ -172,6 +172,16 @@ async function correr() {
       Array.from(d.querySelectorAll('.header__enlace')).every((e) => e.textContent.trim()), '');
   }
 
+  // La palabra de la frase se teclea sola. Es un módulo sin rastro en el DOM
+  // en reposo: si desaparece, la frase se queda muda y nada lo delata. Ya pasó
+  // una vez, borrado por un reemplazo de bloque.
+  const palabra = d.getElementById('taglineWord');
+  const vistas = new Set();
+  for (let i = 0; i < 22; i++) { vistas.add(palabra.textContent); await esperar(140); }
+  comprobar('header: la palabra de la frase se teclea sola',
+    vistas.size > 3 && d.querySelectorAll('.tagline__sizer').length >= 4,
+    `${vistas.size} estados distintos · ${d.querySelectorAll('.tagline__sizer').length} medidores`);
+
   // Los tres elementos del canal izquierdo tienen que salir del mismo margen.
   // Se compara el `left` calculado y no la caja, porque el rótulo vertical
   // lleva un margen negativo que compensa el centrado de sus glifos: la caja

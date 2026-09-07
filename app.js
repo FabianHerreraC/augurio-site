@@ -391,6 +391,67 @@ function createDotField(canvas, opts) {
   });
 })();
 
+
+/* ---- frase del header: "Conversaciones" fija, la segunda palabra se teclea ---- */
+(function () {
+  const word = document.getElementById('taglineWord');
+  const caret = document.getElementById('taglineCaret');
+  const slot = word && word.closest('.tagline__slot');
+  if (!word || !slot) return;
+
+  const WORDS = () => T().tagline.palabras;
+  const TYPE_MS = [55, 95], DEL_MS = [30, 46], HOLD_MS = 1700, GAP_MS = 260;
+
+  // El hueco reserva el ancho de la palabra más ancha para que la línea no se
+  // mueva al escribir. Hay que rehacerlo al cambiar de idioma: las palabras
+  // inglesas no miden lo mismo.
+  function sembrarMedidores() {
+    slot.querySelectorAll('.tagline__sizer').forEach((n) => n.remove());
+    WORDS().forEach(function (w) {
+      const s = document.createElement('span');
+      s.className = 'tagline__sizer';
+      s.setAttribute('aria-hidden', 'true');
+      s.textContent = w;
+      slot.insertBefore(s, slot.firstChild);
+    });
+  }
+  sembrarMedidores();
+  document.addEventListener('augurio:idioma', sembrarMedidores);
+
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    word.textContent = WORDS()[0];
+    document.addEventListener('augurio:idioma', () => { word.textContent = WORDS()[0]; });
+    return;
+  }
+
+  const rand = (r) => r[0] + Math.random() * (r[1] - r[0]);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const idle = (on) => caret && caret.classList.toggle('is-idle', on);
+  const awake = () => document.hidden
+    ? new Promise((res) => document.addEventListener('visibilitychange', function h() {
+        if (document.hidden) return;
+        document.removeEventListener('visibilitychange', h); res();
+      }))
+    : Promise.resolve();
+
+  (async function run() {
+    let i = 0;
+    for (;;) {
+      const w = WORDS()[i];
+      idle(false);
+      for (let c = 1; c <= w.length; c++) { word.textContent = w.slice(0, c); await sleep(rand(TYPE_MS)); }
+      idle(true);
+      await sleep(HOLD_MS);
+      await awake();
+      idle(false);
+      for (let c = w.length - 1; c >= 0; c--) { word.textContent = w.slice(0, c); await sleep(rand(DEL_MS)); }
+      idle(true);
+      await sleep(GAP_MS);
+      i = (i + 1) % WORDS().length;
+    }
+  })();
+})();
+
 /* ---- sección "qué hace": la mano, puntos oscuros sobre papel ----
    La fuente (manosola.png) ya viene limpia: sin texto, sin guías y sin banda. */
 (function () {

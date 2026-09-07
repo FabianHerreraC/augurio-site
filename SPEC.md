@@ -191,6 +191,18 @@ números dejan de caer sobre el gato.
 `translateX` es un porcentaje del propio marco: 8.85% de 180% = 15.9% del panel,
 que es `MOVIL_PAN`.
 
+### Reemplazar un bloque entero de app.js se lleva a los vecinos
+
+Ya ha borrado tres módulos sin que nada avisara: el campo de puntos de la mano
+y, dos veces, la frase del header. Los comentarios de cabecera se parecen entre
+sí —varios empiezan por `sección "qué hace"`— y un corte «desde este comentario
+hasta el siguiente» arrastra lo que haya en medio.
+
+Antes de reemplazar un bloque, comprobar qué queda dentro del corte. Y después,
+correr la sonda: cada módulo con animación propia tiene ahora una comprobación,
+porque un módulo que desaparece no deja error en consola, sólo una página más
+quieta.
+
 ### Cada módulo tiene un guard que lo mata en silencio
 
 Los módulos son IIFE que empiezan con `if (!sec || !x || !y) return;`. Si se
