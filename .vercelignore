@@ -1,0 +1,8 @@
+# Nada de esto se sirve: son herramientas y material de trabajo.
+# La sonda y el servidor de desarrollo no pintan nada en producción, y
+# referencias/ son 30 MB de maquetas que sólo existen para poder volver a
+# medir de dónde salió cada número del CSS.
+dev/
+referencias/
+SPEC.md
+README.md
