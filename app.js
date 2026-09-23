@@ -576,44 +576,40 @@ const GRANO = {
   // sirve: la mano cae donde la deje el encuadre —que cambia entre escritorio
   // y móvil— y un campo fijo se desalinea sin que nada avise.
   //
-  // Y no es una elipse. Una mano abierta no cabe en una: los dedos se salen,
-  // y una elipse que los cubra aparta el texto muchísimo más de lo necesario
-  // a la altura de la palma. Se calcula un campo de distancia sobre una
-  // rejilla: cada celda guarda a qué distancia está de la mano, con signo
-  // (negativo dentro). El gradiente de ese campo apunta siempre hacia afuera,
-  // así que empujar por él aparta cada letra por el camino más corto y el
-  // texto acaba abrazando la silueta.
+  // La mano funciona como un agujero blanco: emite las letras desde su centro
+  // y las centrifuga alrededor. Antes el campo empujaba cada letra hasta el
+  // contorno siguiendo una distancia con signo, y eso tenía dos defectos que
+  // ningún ajuste arreglaba. Todas las letras de dentro acababan en la misma
+  // franja pegada al borde, apiladas hasta ser ilegibles. Y al cruzar la mitad
+  // de la mano cada letra cambiaba de golpe de salir por arriba a salir por
+  // abajo: saltos de hasta 290 px en un cuadro.
+  //
+  // Ahora el hueco se describe desde el centro de la mano con su perfil
+  // radial —cuánto mide la mano en cada una de 96 direcciones—, y cada letra
+  // se desplaza con r' = sqrt(r² + A²·h(r)). Sin la atenuación h esa es la
+  // transformación que conserva el área: lo que ocupaba la mano se reparte en
+  // un anillo alrededor en vez de apilarse, y eso es dispersar.
+  //
+  // La atenuación es h = (1 - x²)³ con x = r/R: vale 1 en el centro y llega a
+  // cero en R sin pendiente, así que el campo acaba del todo y sin corte. Una
+  // campana exp(-(r/σ)²) no se anula nunca y había que cortarla a casi tres
+  // veces el hueco; en móvil eso cubría la pantalla entera y todo el texto
+  // quedaba siempre un poco torcido.
+  //
+  // Garantía, no tanteo: como 1 - (1 - t)³ ≤ 3t, con R ≥ √3·A se cumple
+  // r'² - A² = r² - A²(1 - h) ≥ r² - 3A²·r²/R² ≥ 0. Ninguna letra puede acabar
+  // dentro del hueco. Y la misma condición hace que r' crezca con r: dos
+  // letras nunca se cruzan en la dirección radial.
   const REJILLA = 120;     // columnas de la rejilla; las filas salen del alto
-  const ALCANCE = 0.068;   // radio de influencia, en fracción del ancho
-  const EMPUJE = 1.0;      // 1 deja la letra justo en el borde del alcance
-  const ENCOGE = 0.3;      // cuánto se encoge la letra pegada a la mano
-  const GIRO = 20;         // grados de giro máximo
+  const DIRECCIONES = 96;  // resolución del perfil radial de la mano
+  const HOLGURA = 4;       // px entre el cuerpo de la letra y la mano
+  const ALCANCE = 1.8;     // R en múltiplos del hueco; tiene que ser ≥ √3
+  const REMOLINO = 0.28;   // giro alrededor del centro, en radianes, junto a él
+  const GIRO = 12;         // grados de giro máximo de la letra
+  const ENCOGE = 0.05;     // cuánto se encoge la letra junto a la mano, además
+  const MENOR = 0.5;       // la letra más pequeña que deja la compresión
 
-  let campo = null;        // { gw, gh, s } con s = distancia con signo, en celdas
-
-  // Transformada de distancia por dos pasadas (chamfer 3-4).
-  function distancia(mascara, gw, gh, dentro) {
-    const INF = 1e9;
-    const D = new Float32Array(gw * gh);
-    for (let i = 0; i < D.length; i++) D[i] = (mascara[i] === dentro) ? 0 : INF;
-    const paso = (x, y, dx, dy, coste) => {
-      const nx = x + dx, ny = y + dy;
-      if (nx < 0 || ny < 0 || nx >= gw || ny >= gh) return INF;
-      return D[ny * gw + nx] + coste;
-    };
-    for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
-      const i = y * gw + x;
-      if (D[i] === 0) continue;
-      D[i] = Math.min(D[i], paso(x,y,-1,0,3), paso(x,y,0,-1,3), paso(x,y,-1,-1,4), paso(x,y,1,-1,4));
-    }
-    for (let y = gh - 1; y >= 0; y--) for (let x = gw - 1; x >= 0; x--) {
-      const i = y * gw + x;
-      if (D[i] === 0) continue;
-      D[i] = Math.min(D[i], paso(x,y,1,0,3), paso(x,y,0,1,3), paso(x,y,1,1,4), paso(x,y,-1,1,4));
-    }
-    for (let i = 0; i < D.length; i++) D[i] /= 3;   // de coste chamfer a celdas
-    return D;
-  }
+  let campo = null;        // { hx, hy, perfil } centro y perfil, en px del marco
 
   function medirCampo() {
     const c = document.getElementById('mano');
@@ -658,11 +654,47 @@ const GRANO = {
     }
     mascara = gorda;
 
-    const fuera = distancia(mascara, gw, gh, 1);   // distancia a la mano
-    const dentro = distancia(mascara, gw, gh, 0);  // distancia al papel
-    const s = new Float32Array(gw * gh);
-    for (let i = 0; i < s.length; i++) s[i] = mascara[i] ? -dentro[i] : fuera[i];
-    campo = { gw, gh, s };
+    // Centro y perfil radial, en px del marco. El lienzo llena el marco, así
+    // que su caja en pantalla da la escala de cada celda.
+    const caja = c.getBoundingClientRect();
+    const pxX = caja.width / gw, pxY = caja.height / gh;
+    let sx = 0, sy = 0, n = 0;
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      if (!mascara[gy * gw + gx]) continue;
+      sx += (gx + 0.5) * pxX; sy += (gy + 0.5) * pxY; n++;
+    }
+    const hx = sx / n, hy = sy / n;
+
+    // Lo más lejos que llega la mano en cada dirección. Se miran las cuatro
+    // esquinas de cada celda para que el perfil la contenga entera.
+    const K = DIRECCIONES;
+    const crudo = new Float32Array(K);
+    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
+      if (!mascara[gy * gw + gx]) continue;
+      for (let e = 0; e < 4; e++) {
+        const dx = (gx + (e & 1)) * pxX - hx, dy = (gy + (e >> 1)) * pxY - hy;
+        const b = (((Math.atan2(dy, dx) / (2 * Math.PI)) % 1 + 1) % 1 * K) | 0;
+        const r = Math.hypot(dx, dy);
+        if (r > crudo[b]) crudo[b] = r;
+      }
+    }
+    // Se cierran los huecos entre dedos —la letra rodea la mano, no se mete
+    // entre ellos— y se suaviza. El suavizado nunca baja de lo que mide la
+    // mano en esa dirección ni en las vecinas: al interpolar entre dos
+    // direcciones, el hueco sigue conteniendo la mano entera.
+    const cerrado = new Float32Array(K);
+    for (let b = 0; b < K; b++) {
+      let m = 0;
+      for (let k = -3; k <= 3; k++) m = Math.max(m, crudo[(b + k + K) % K]);
+      cerrado[b] = m;
+    }
+    const perfil = new Float32Array(K);
+    for (let b = 0; b < K; b++) {
+      let suma = 0;
+      for (let k = -4; k <= 4; k++) suma += cerrado[(b + k + K) % K];
+      perfil[b] = Math.max(suma / 9, crudo[(b - 1 + K) % K], crudo[b], crudo[(b + 1) % K]);
+    }
+    campo = { hx, hy, perfil };
     return true;
   }
 
@@ -737,13 +769,23 @@ const GRANO = {
 
     letras = [];
     [[titular, 'titular'], [fases, 'fases']].forEach(function ([raiz, cinta]) {
+      // Se mide en reposo. Si las letras llevaran puesto el empuje del último
+      // cuadro —pasa al redimensionar—, su posición desplazada quedaría
+      // guardada como la de reposo.
+      const todas = raiz.querySelectorAll('.let');
+      todas.forEach((el) => { el.style.transform = ''; el.style.opacity = ''; });
       const base = raiz.getBoundingClientRect();
-      raiz.querySelectorAll('.let').forEach(function (el) {
+      todas.forEach(function (el) {
         const r = el.getBoundingClientRect();
         letras.push({ el, cinta,
           // posición en reposo, relativa al origen sin trasladar de su cinta
           x: r.left - base.left + r.width / 2,
           y: r.top - base.top + r.height / 2,
+          // radio del cuerpo de la letra: una del titular mide 250 px de alto
+          // y necesita mucha más holgura que una de párrafo
+          r: Math.hypot(r.width, r.height) * 0.35,
+          // cuánto gira: completo en letras de texto, menos en las gigantes
+          kGiro: Math.min(1, 24 / Math.max(1, r.height)),
           puesta: false });
       });
     });
@@ -768,56 +810,90 @@ const GRANO = {
     fases.style.transform = 'translate3d(' + tF.toFixed(1) + 'px,0,0)';
 
     if (!campo) { if (progreso) progreso.textContent = Math.round(q * 100) + '%'; return; }
-    const { gw, gh, s: campoS } = campo;
-    const alcance = ALCANCE * vw;              // en px
-    const celda = vw / gw;                     // px por celda
-    const alcanceC = alcance / celda;          // en celdas
+    const { hx, hy, perfil } = campo;
+    const K = perfil.length, VUELTA = 2 * Math.PI;
+    // radio del hueco en una dirección, interpolado entre las dos vecinas
+    const perfilEn = (th) => {
+      const t = ((th / VUELTA) % 1 + 1) % 1 * K, b = t | 0, a = t - b;
+      return perfil[b] * (1 - a) + perfil[(b + 1) % K] * a;
+    };
 
-    const leer = (gx, gy) => campoS[Math.min(gh - 1, Math.max(0, gy)) * gw +
-                                    Math.min(gw - 1, Math.max(0, gx))];
+    // Dónde acaba un punto, con el hueco agrandado por el cuerpo de la letra.
+    // Deja el resultado en mX, mY, mGiro (el remolino, en radianes), mW (de 0
+    // lejos a 1 junto a la mano) y mA (el radio del hueco en esa dirección).
+    let mX = 0, mY = 0, mGiro = 0, mW = 0, mA = 0;
+    // 1 en el centro, 0 desde el alcance en adelante, sin pendiente en el borde
+    const atenua = (xr) => { if (xr >= 1) return 0; const t = 1 - xr * xr; return t * t * t; };
+    const mapa = (x, y, cuerpo) => {
+      const vx = x - hx, vy = y - hy;
+      const r = Math.hypot(vx, vy), th = Math.atan2(vy, vx);
+      const A0 = perfilEn(th) + cuerpo;
+      // Remolino: giro alrededor del centro, a contracorriente de las agujas
+      // del reloj, que es el sentido de las cintas —por encima va hacia la
+      // izquierda, como el titular; por debajo hacia la derecha, como las
+      // fases—. Las letras aceleran al rodear la mano y se abren huecos por
+      // delante: eso es lo que se lee como centrifugado. Un giro que decrece
+      // con la distancia también conserva el área.
+      const dth = -REMOLINO * atenua(r / (A0 * ALCANCE));
+      const th1 = th + dth;
+      // La emisión se calcula ya en la dirección final, así la garantía vale
+      // para donde la letra acaba y no para donde empezó.
+      const A1 = perfilEn(th1) + cuerpo;
+      const w = atenua(r / (A1 * ALCANCE));
+      const r1 = Math.sqrt(r * r + A1 * A1 * w);
+      mX = hx + r1 * Math.cos(th1); mY = hy + r1 * Math.sin(th1);
+      mGiro = dth; mW = w; mA = A1;
+      return r;
+    };
+    const D = 2;   // px, para medir cuánto se estira o se comprime el espacio
 
     for (let i = 0; i < letras.length; i++) {
       const L = letras[i];
       const esT = L.cinta === 'titular';
       const x = L.x + (esT ? tT : tF);
       const y = L.y + (esT ? desT : desF);
+      const cuerpo = L.r + HOLGURA;
 
-      const gx0 = Math.round(x / vw * gw), gy0 = Math.round(y / vh * gh);
-      if (gx0 < -2 || gy0 < -2 || gx0 > gw + 2 || gy0 > gh + 2) {
-        if (L.puesta) { L.el.style.transform = ''; L.puesta = false; }
+      // Fuera del alcance el campo es exactamente cero: la letra en su sitio.
+      // Se mira con un poco de margen porque las muestras de la compresión
+      // caen a 2 px y el giro puede llevar la dirección a un hueco mayor.
+      const r = Math.hypot(x - hx, y - hy);
+      if (r >= (perfilEn(Math.atan2(y - hy, x - hx)) + cuerpo) * ALCANCE * 1.05 + D) {
+        if (L.puesta) { L.el.style.transform = ''; L.el.style.opacity = ''; L.puesta = false; }
         continue;
       }
-      const d0 = leer(gx0, gy0);
-      if (d0 >= alcanceC) {
-        if (L.puesta) { L.el.style.transform = ''; L.puesta = false; }
-        continue;
-      }
 
-      // Se avanza por el gradiente a pasitos en vez de dar un salto recto.
-      // Una letra bajo la palma tiene su salida más corta hacia arriba, pero
-      // en línea recta vuelve a caer sobre los dedos: siguiendo el campo paso
-      // a paso, rodea la silueta y sale por el hueco.
-      let sx = x, sy = y, pasos = 0;
-      while (pasos < 26) {
-        const cgx = Math.round(sx / vw * gw), cgy = Math.round(sy / vh * gh);
-        if (leer(cgx, cgy) >= alcanceC) break;
-        let ux = leer(cgx + 1, cgy) - leer(cgx - 1, cgy);
-        let uy = leer(cgx, cgy + 1) - leer(cgx, cgy - 1);
-        const mod = Math.hypot(ux, uy);
-        if (mod < 0.0001) { uy = -1; ux = 0; } else { ux /= mod; uy /= mod; }
-        sx += ux * celda; sy += uy * celda;
-        pasos++;
-      }
+      // Cuánto se comprime el espacio alrededor de la letra, en horizontal y
+      // en vertical. Emitir desde un centro conservando el área obliga a
+      // comprimir en la dirección radial, y a los lados de la mano esa
+      // dirección es la de la línea: las letras se pisaban. Se encogen en la
+      // misma medida que el espacio, como un texto visto por una lente, y
+      // así caben sin tocarse.
+      mapa(x - D, y, cuerpo); const ax = mX, ay = mY;
+      mapa(x + D, y, cuerpo); const bx = mX, by = mY;
+      mapa(x, y - D, cuerpo); const cx = mX, cy = mY;
+      mapa(x, y + D, cuerpo); const ex = mX, ey = mY;
+      const kx = Math.hypot(bx - ax, by - ay) / (2 * D);
+      const ky = Math.hypot(ex - cx, ey - cy) / (2 * D);
+      let k = Math.min(kx, ky, 1);
+      if (k < MENOR) k = MENOR;
 
-      const desX = sx - x, desY = sy - y;
-      // la deformación va con lo hondo que estuviera, no con lo que viajó
-      const f = Math.min(1, (alcanceC - d0) / alcanceC);
-      const g = f * f;
-      const esc = 1 - g * ENCOGE;
-      const gir = (desX >= 0 ? 1 : -1) * g * GIRO;
+      mapa(x, y, cuerpo);
+      const desX = mX - x, desY = mY - y;
+      let gir = mGiro * 180 / Math.PI * L.kGiro;
+      if (gir < -GIRO) gir = -GIRO;
+      const esc = k * (1 - ENCOGE * mW);
+      // Las pocas letras que pasan por el mismo centro dan media vuelta al
+      // hueco en muy poco recorrido. Salen de él encendiéndose en vez de
+      // cruzar la pantalla de golpe.
+      let u = (r / mA - 0.08) / 0.37;
+      u = u < 0 ? 0 : u > 1 ? 1 : u;
+      const op = 0.15 + 0.85 * u * u * (3 - 2 * u);
+
       L.el.style.transform =
         'translate3d(' + desX.toFixed(1) + 'px,' + desY.toFixed(1) + 'px,0) rotate(' +
         gir.toFixed(1) + 'deg) scale(' + esc.toFixed(3) + ')';
+      L.el.style.opacity = op < 0.995 ? op.toFixed(2) : '';
       L.puesta = true;
     }
 

@@ -105,54 +105,59 @@ leerían al revés.
 Cada letra va en su propio `inline-block` para poder empujarla, agrupadas por
 palabra para que el salto de línea siga cayendo entre palabras.
 
-**El campo no es una elipse.** Una mano abierta no cabe en una: los dedos se
-salen, y una elipse que los cubra aparta el texto muchísimo más de lo necesario
-a la altura de la palma. Se calcula un campo de distancia con signo sobre una
-rejilla de 120 columnas, sacado de leer el propio lienzo —no de las maquetas:
-la mano cae donde la deje el encuadre, y un campo fijo se desalinea sin avisar.
+**La mano es un agujero blanco.** Emite las letras desde su centro y las
+centrifuga alrededor. Antes el campo empujaba cada letra hasta el contorno
+siguiendo una distancia con signo, y tenía dos defectos que ningún ajuste
+arreglaba: las letras de dentro acababan apiladas en una franja pegada al
+borde, y al cruzar la mitad de la mano cada una cambiaba de golpe de salir por
+arriba a salir por abajo (saltos de hasta 290 px en un cuadro).
 
-**El empuje va a pasitos, no de un salto.** Una letra bajo la palma tiene su
-salida más corta hacia arriba, pero en línea recta vuelve a caer sobre los
-dedos. Siguiendo el gradiente paso a paso rodea la silueta y sale por el hueco.
-Con el salto recto quedaban letras encima de la mano; con los pasos, ninguna.
+El hueco se describe desde el centro de la mano con su **perfil radial**: cuánto
+mide en cada una de 96 direcciones, con los huecos entre dedos cerrados para que
+la letra rodee la mano y no se meta entre ellos. El suavizado del perfil nunca
+baja de lo que mide la mano en esa dirección ni en las vecinas, así que al
+interpolar el hueco sigue conteniéndola entera. Se lee del propio lienzo, no de
+las maquetas: la mano cae donde la deje el encuadre.
 
-La máscara se engorda una celda antes de la transformada: la rejilla mide 12 px
-por celda y una letra cabe de sobra en el borde de una celda tenida por papel.
+Cada letra se desplaza con **r' = √(r² + A²·h(r))**, con `A` el hueco en su
+dirección más el cuerpo de la letra. Sin la atenuación `h`, esa transformación
+conserva el área: lo que ocupaba la mano se reparte en un anillo alrededor en
+vez de apilarse. `h = (1 − x²)³` con `x = r/R` llega a cero en `R` sin
+pendiente, así que el campo acaba del todo, sin corte.
 
-### El grano de fondo es una siembra aparte
+**Garantía, no tanteo.** Como `1 − (1 − t)³ ≤ 3t`, con `R ≥ √3·A` se cumple
+`r'² − A² ≥ 0`: ninguna letra puede acabar dentro del hueco. La misma condición
+hace que `r'` crezca con `r`, así que dos letras nunca se cruzan en la dirección
+radial. `ALCANCE = 1.8`.
 
-Todas las secciones oscuras comparten el mismo grano titilante, el del header.
-No sale de las imágenes: el motor lo siembra aparte con los números de `GRANO`
-(0.038 puntos por píxel de lienzo, brillo 66 ± 20%), uniforme en cada lienzo.
+**Remolino.** Un giro alrededor del centro que decrece con la distancia —también
+conserva el área—, en sentido antihorario: por encima de la mano lleva a la
+izquierda, como el titular, y por debajo a la derecha, como las fases. Las
+letras aceleran al rodear la mano y se abren huecos por delante; eso es lo que
+se lee como centrifugado. La emisión se calcula ya en la dirección final, para
+que la garantía valga donde la letra acaba.
 
-Antes el grano era el peso de suelo (`wFloor`) de cada imagen, y el reparto de
-puntos se normaliza contra toda la figura: la densidad del fondo dependía del
-tamaño de la figura y de `pxPerDot`. El gato y problemas llevaban 2.2 y 2.5
-veces más grano que el header. Igualar esos números a mano no aguanta: cambias
-una imagen y se desajusta.
+**Lente.** Emitir desde un centro conservando el área obliga a comprimir en la
+dirección radial, y a los lados de la mano esa dirección es la de la línea: las
+letras se pisaban. Cada letra se encoge en la misma medida que el espacio a su
+alrededor, medida con el jacobiano de la transformación en cuatro puntos a
+±2 px. Nunca por debajo de la mitad.
 
-Con `grano`, la figura siembra sólo lo que es figura —sin peso de suelo y sin
-los casi-negros—, pero `k` se sigue calculando sobre el total original: así la
-figura conserva exactamente su ritmo de puntos y sólo cambia el fondo.
+Las letras que pasan justo por el centro dan media vuelta al hueco en muy poco
+recorrido; salen de él encendiéndose en vez de cruzar la pantalla de golpe.
 
-**`negro` es de cada imagen, no del grano.** Dice hasta qué luminancia la fuente
-es fondo, con una rampa para que el halo no acabe en borde. Cada fuente tiene su
-negro en otro sitio (medido sobre su histograma): el ruido del gato llega a
-0.06, mientras que problemas es limpísimo y su cabeza, tenue, arranca muy abajo.
-Un corte único en 0.06–0.14 se comía la cabeza de problemas.
+Medido contra el campo anterior, en cinco puntos del recorrido a 1440:
 
-**Con grano, la imagen se lee sobre negro puro.** El lienzo auxiliar donde se
-muestrea la fuente se rellena con 0, no con el papel: si no, los márgenes del
-encuadre `contain` valen 0.039 y con un corte más bajo se ponían a sembrar. El
-color visible del fondo sale de `BG` y no cambia.
+| | antes | ahora |
+|---|---|---|
+| letras fuera de orden de lectura | 70 | 0 |
+| pares de letras vecinas que se pisan | 270 (41%) | 99 (11%) |
+| saltos de más de 6 px, scroll de 3 en 3 | 12.8% de los movimientos | ninguno en 235.000 |
 
-Las franjas de difuminado siembran su lado oscuro con la misma densidad y el
-mismo titileo, y las secciones oscuras ya no llevan baldosa estática: su color
-liso es el papel del motor (`#0a0a0a`), para que no haya salto antes de que el
-lienzo pinte.
-
-Medido a 1440: header 3.32%, gato 3.30%, problemas 3.19% de píxeles con grano,
-todos con brillo 74. La sonda comprueba que no se separen más de un 25%.
+Probados tres alcances: con la campana `exp(−(r/σ)²)` cortada a 2.2σ el campo
+cubría la pantalla del móvil; con `R = 2.2·A` hay más letras tocadas y más
+choques que con 1.8 y las mismas letras pequeñas. Esas letras pequeñas son la
+compresión propia de emitir conservando el área, no del alcance.
 
 ### En la mano no se puede leer maquetación al pintar
 
@@ -160,8 +165,8 @@ todos con brillo 74. La sonda comprueba que no se separen más de un 25%.
 `medirLetras`. Leer maquetación después de escribir transformaciones obliga al
 navegador a recalcularla para las mil y pico letras en cada cuadro.
 
-Una pasada completa sobre las 1143 letras cuesta 1.3 ms, y un cuadro real sólo
-toca las que están dentro del campo.
+Un cuadro sólo calcula las letras dentro del alcance, y cada una evalúa la
+transformación cinco veces: cuatro para la lente y una para la posición.
 
 ### text-indent se hereda y lo aplica cada inline-block
 
