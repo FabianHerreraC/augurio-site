@@ -1,5 +1,5 @@
 :root {
-  --bg: #000;
+  --bg: #0a0a0a;   /* el papel del motor de puntos */
   --fg: #f2f2f2;
   /* proporciones tomadas de Auguriositeok.png */
   --logo-y: 19.2%;
@@ -39,7 +39,7 @@ html, body {
   height: 100svh;
   min-height: 400px;
   overflow: hidden;
-  background: #000;
+  background: #0a0a0a;
 }
 
 .header__canvas {
@@ -414,12 +414,10 @@ html, body {
 .gato {
   position: relative;
   height: 680svh;   /* el tramo de más al final sostiene la malla en pantalla */
-  background: #000 url('textura-negro.jpg') repeat;
-  /* La baldosa mide 160 px reales. Mostrada a 160 px CSS, en una pantalla
-     DPR 2 se amplía al doble y cada píxel de ruido pasa a ser un bloque de
-     2x2: eso es lo que se veía pixelado. A 80 px cae 1:1 en pantallas de
-     doble densidad y el grano vuelve a ser de un píxel. */
-  background-size: 80px 80px;
+  /* Sin baldosa: el grano lo pone el lienzo, titilando igual que en el
+     header. Este color es el papel del motor (10), así que antes de que el
+     lienzo pinte no hay salto. */
+  background: #0a0a0a;
 }
 
 .gato__fijo {
@@ -594,12 +592,10 @@ html, body {
 .probs {
   position: relative;
   width: 100%;
-  background: #000 url('textura-negro.jpg') repeat;
-  /* La baldosa mide 160 px reales. Mostrada a 160 px CSS, en una pantalla
-     DPR 2 se amplía al doble y cada píxel de ruido pasa a ser un bloque de
-     2x2: eso es lo que se veía pixelado. A 80 px cae 1:1 en pantallas de
-     doble densidad y el grano vuelve a ser de un píxel. */
-  background-size: 80px 80px;
+  /* Sin baldosa: el grano lo pone el lienzo, titilando igual que en el
+     header. Este color es el papel del motor (10), así que antes de que el
+     lienzo pinte no hay salto. */
+  background: #0a0a0a;
 }
 
 /* El marco ocupa todo el ancho para que el grano del fondo llegue a los

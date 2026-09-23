@@ -150,6 +150,8 @@ function createDotField(canvas, opts) {
     zoomCap: 1.35,      // tope de acercamiento respecto del encuadre "contain"
     srcTop: 0,          // fracción superior de la fuente que se descarta
     onListo: null,      // se llama una vez, tras el primer pintado
+    grano: null,        // grano de fondo propio: ver GRANO
+    negro: [0.05, 0.09],// con grano propio: luminancia hasta la que la imagen es fondo
     prepare: null       // fn(ctx, w, h) para limpiar la fuente antes de muestrear
   }, opts || {});
 
@@ -184,7 +186,12 @@ function createDotField(canvas, opts) {
     const off = document.createElement('canvas');
     off.width = W; off.height = H;
     const octx = off.getContext('2d', { willReadFrequently: true });
-    octx.fillStyle = 'rgb(' + o.paper + ',' + o.paper + ',' + o.paper + ')';
+    // Esto sólo se lee, no se ve. Con grano propio se rellena con negro puro:
+    // si no, los márgenes del encuadre 'contain' valen lo que el papel (0.039)
+    // y un corte de negro por debajo de eso los pondría a sembrar. El color
+    // visible del fondo sale de BG y no cambia.
+    const relleno = o.grano && !o.dark ? 0 : o.paper;
+    octx.fillStyle = 'rgb(' + relleno + ',' + relleno + ',' + relleno + ')';
     octx.fillRect(0, 0, W, H);
 
     const sy = Math.round(clean.height * o.srcTop);
@@ -207,19 +214,32 @@ function createDotField(canvas, opts) {
     const n = W * H;
 
     const weight = new Float32Array(n);
+    const G = o.grano;
     let total = 0;
     for (let i = 0, p = 0; i < n; i++, p += 4) {
       let l = (data[p] * 0.299 + data[p + 1] * 0.587 + data[p + 2] * 0.114) / 255;
       if (o.dark) l = 1 - l;            // sobre papel, manda la oscuridad
       if (o.cut) l = Math.max(0, (l - o.cut) / (1 - o.cut));
       const w = l <= 0 && o.cut ? 0 : o.wFloor + (1 - o.wFloor) * Math.pow(l, o.wGamma);
-      weight[i] = w; total += w;
+      total += w;
+      // Con grano propio la figura siembra sólo lo que es figura: fuera el
+      // peso de suelo y fuera los casi-negros, con una rampa suave para que
+      // el halo no termine en un borde. El total, y por tanto k, se calcula
+      // igual que antes: así la figura conserva exactamente su ritmo de
+      // puntos y sólo cambia el fondo.
+      if (G) {
+        const r = Math.min(1, Math.max(0, (l - o.negro[0]) / (o.negro[1] - o.negro[0])));
+        weight[i] = (w - o.wFloor) * r * r * (3 - 2 * r);
+      } else {
+        weight[i] = w;
+      }
     }
 
     const sc = o.scatter * (W / 1440);
     const target = Math.max(o.minDots, Math.min(o.maxDots, Math.round(n / val(o.pxPerDot))));
     const k = target / total;
-    const cap = target * 1.4 | 0;
+    const nGrano = G ? Math.round(n * G.densidad) : 0;
+    const cap = (target * 1.4 | 0) + nGrano;
 
     px = new Float32Array(cap); py = new Float32Array(cap);
     pv = new Float32Array(cap);
@@ -264,6 +284,19 @@ function createDotField(canvas, opts) {
         amp[c] = (0.18 + Math.random() * 0.3) * o.fizz * vivo;
         dsc[c] = vivo;
       }
+    }
+    // El grano de fondo, sembrado aparte y uniforme. No depende de la imagen
+    // ni de pxPerDot: sale de GRANO y es idéntico en cada sección oscura.
+    for (let j = 0; j < nGrano && c < cap; j++, c++) {
+      px[c] = Math.random() * W;
+      py[c] = Math.random() * H;
+      pv[c] = Math.min(255, G.brillo * (1 - G.variacion + Math.random() * 2 * G.variacion));
+      ph1[c] = Math.random() * LUT | 0;
+      ph2[c] = Math.random() * LUT | 0;
+      sp1[c] = (0.6 + Math.random() * 2.2) * G.fizz;
+      sp2[c] = (0.15 + Math.random() * 0.5) * G.fizz;
+      amp[c] = (0.18 + Math.random() * 0.3) * G.fizz;
+      dsc[c] = 1;
     }
     count = c;
 
@@ -380,6 +413,29 @@ function createDotField(canvas, opts) {
   return { start: start, stop: stop, resize: resize };
 }
 
+/* El grano de fondo de todas las secciones oscuras. Antes salía de los
+   píxeles oscuros de cada imagen y se repartía en proporción a su figura, así
+   que cada sección tenía uno distinto: el gato y problemas llevaban 2.2 y 2.5
+   veces más puntos que el header. Ahora es una siembra aparte con estos
+   números, idéntica en cada lienzo. Referencia: el header, 3.3% de píxeles
+   encendidos con brillo 73 a 1440 de ancho. */
+const GRANO = {
+  densidad: 0.038,    // puntos por píxel de lienzo
+  brillo: 66,         // brillo medio del punto de grano, 0-255
+  variacion: 0.2,     // ± sobre ese brillo
+  fizz: 2.2           // mismo titileo que el resto
+};
+
+/* Con grano propio, cada imagen dice hasta qué luminancia es fondo: por debajo
+   no siembra, y hay una rampa hasta el segundo valor para que el halo no acabe
+   en un borde. Es propiedad de la imagen, no del grano, porque cada fuente
+   tiene su negro en otro sitio (medido sobre el histograma):
+     header     negro < 0.06, halo desde ahí
+     gato       ruido entre 0.035 y 0.06, figura casi toda > 0.14
+     problemas  negro limpísimo (p75 0.008); la cabeza es tenue y arranca muy abajo
+   Los márgenes del encuadre 'contain' no molestan: con grano propio el motor
+   los rellena de negro puro para leer la imagen, así que no siembran. */
+
 /* ---- header: puntos claros sobre negro ---- */
 (function () {
   const c = document.getElementById('dust');
@@ -392,6 +448,8 @@ function createDotField(canvas, opts) {
   createDotField(c, {
     src: 'headerA.png',
     paper: 10,
+    grano: GRANO,
+    negro: [0.055, 0.09],
     zoomCap: 1.35,
     // El encuadre se deja como estaba: header3.png trae las figuras al mismo
     // tamaño y en el mismo sitio, lo que cambia es lo que va encima.
@@ -846,6 +904,8 @@ const MOVIL_PAN = 0.159;   // ver .gato__marco: translateX(8.85%)
   createDotField(c, {
     src: 'gato-src.jpg',
     paper: 10,
+    grano: GRANO,
+    negro: [0.06, 0.10],
     fit: 'contain',
     // En móvil el 'contain' deja al gato en una franja de 258 px de alto: los
     // trazos que unen los números quedan de 40 px y no se leen. La maqueta lo
@@ -1128,6 +1188,8 @@ function limpiarGato(cx, w, h) {
   if (!c) return;
   createDotField(c, {
     src: 'problemas-src.jpg',
+    grano: GRANO,
+    negro: [0.008, 0.02],
     // mismos valores que la sección del gato: el negro de fondo tiene que ser
     // el mismo grano, no negro plano
     paper: 10,
@@ -1264,8 +1326,16 @@ function createDifuminado(canvas, opts) {
         px[c] = x; py[c] = y;
         pv[c] = Math.max(0, Math.min(255, Math.round(mezcla(base, tinta, 0.65 + Math.random() * 0.35))));
         ph[c] = Math.random() * LUT | 0;
-        sp[c] = (0.5 + Math.random() * 2) * 2.2;   // misma efervescencia que el resto
-        amp[c] = (0.1 + Math.random() * 0.22) * 2.2;
+        // El lado oscuro titila como el grano de las secciones oscuras, para
+        // que la franja empalme con ellas sin que se note el cambio de lienzo.
+        // El lado de papel conserva su titileo más suave.
+        if ((deA ? o.papelA : o.papelB) < 128) {
+          sp[c] = (0.6 + Math.random() * 2.2) * GRANO.fizz;
+          amp[c] = (0.18 + Math.random() * 0.3) * GRANO.fizz;
+        } else {
+          sp[c] = (0.5 + Math.random() * 2) * 2.2;
+          amp[c] = (0.1 + Math.random() * 0.22) * 2.2;
+        }
         c++;
       }
     }

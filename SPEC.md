@@ -83,10 +83,10 @@ pantalla sin duplicar la instancia.
 
 | Sección | Fuente | Encuadre |
 |---|---|---|
-| header | `headerA.png` | cover, `zoomCap` 1.35 |
+| header | `headerA.png` | cover, `zoomCap` 1.35; `grano: GRANO`, `negro` [0.055, 0.09] |
 | mano | `mano-src.jpg` | sobre papel (`dark: true`), `scatter` 3.6, `pxPerDot` 6; en móvil `zoomCap` 3.4 + `zoom` 0.8, `panX` −0.02, `panY` 0.05 |
-| gato | `gato-src.jpg` | contain; en móvil `zoom` 1.8 y `panX` 0.159 |
-| problemas | `problemas-src.jpg` | contain; en móvil cover + `zoom` 1.15, `panX` 0.138, `panY` −0.06 |
+| gato | `gato-src.jpg` | contain; en móvil `zoom` 1.8 y `panX` 0.159; `grano: GRANO`, `negro` [0.06, 0.10] |
+| problemas | `problemas-src.jpg` | contain; en móvil cover + `zoom` 1.15, `panX` 0.138, `panY` −0.06; `grano: GRANO`, `negro` [0.008, 0.02] |
 
 ---
 
@@ -118,6 +118,41 @@ Con el salto recto quedaban letras encima de la mano; con los pasos, ninguna.
 
 La máscara se engorda una celda antes de la transformada: la rejilla mide 12 px
 por celda y una letra cabe de sobra en el borde de una celda tenida por papel.
+
+### El grano de fondo es una siembra aparte
+
+Todas las secciones oscuras comparten el mismo grano titilante, el del header.
+No sale de las imágenes: el motor lo siembra aparte con los números de `GRANO`
+(0.038 puntos por píxel de lienzo, brillo 66 ± 20%), uniforme en cada lienzo.
+
+Antes el grano era el peso de suelo (`wFloor`) de cada imagen, y el reparto de
+puntos se normaliza contra toda la figura: la densidad del fondo dependía del
+tamaño de la figura y de `pxPerDot`. El gato y problemas llevaban 2.2 y 2.5
+veces más grano que el header. Igualar esos números a mano no aguanta: cambias
+una imagen y se desajusta.
+
+Con `grano`, la figura siembra sólo lo que es figura —sin peso de suelo y sin
+los casi-negros—, pero `k` se sigue calculando sobre el total original: así la
+figura conserva exactamente su ritmo de puntos y sólo cambia el fondo.
+
+**`negro` es de cada imagen, no del grano.** Dice hasta qué luminancia la fuente
+es fondo, con una rampa para que el halo no acabe en borde. Cada fuente tiene su
+negro en otro sitio (medido sobre su histograma): el ruido del gato llega a
+0.06, mientras que problemas es limpísimo y su cabeza, tenue, arranca muy abajo.
+Un corte único en 0.06–0.14 se comía la cabeza de problemas.
+
+**Con grano, la imagen se lee sobre negro puro.** El lienzo auxiliar donde se
+muestrea la fuente se rellena con 0, no con el papel: si no, los márgenes del
+encuadre `contain` valen 0.039 y con un corte más bajo se ponían a sembrar. El
+color visible del fondo sale de `BG` y no cambia.
+
+Las franjas de difuminado siembran su lado oscuro con la misma densidad y el
+mismo titileo, y las secciones oscuras ya no llevan baldosa estática: su color
+liso es el papel del motor (`#0a0a0a`), para que no haya salto antes de que el
+lienzo pinte.
+
+Medido a 1440: header 3.32%, gato 3.30%, problemas 3.19% de píxeles con grano,
+todos con brillo 74. La sonda comprueba que no se separen más de un 25%.
 
 ### En la mano no se puede leer maquetación al pintar
 

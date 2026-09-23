@@ -87,9 +87,22 @@ async function correr() {
   const salida = document.getElementById('salida');
   salida.innerHTML = '<p>cargando…</p>';
 
-  // recarga limpia: sin esto el iframe reutiliza el documento anterior y se
-  // mide un estado viejo, que ya dio una lectura falsa una vez
-  await new Promise((r) => { marco.onload = r; marco.src = '../index.html?v=' + Date.now(); });
+  // Recarga limpia: sin esto el iframe reutiliza el documento anterior y se
+  // mide un estado viejo, que ya dio una lectura falsa una vez.
+  //
+  // Y se espera a que cargue *esta* URL, no a cualquier onload. Si se pulsa
+  // Comprobar mientras el iframe aún termina su carga inicial, un onload
+  // genérico se dispara con esa carga vieja, y todo se mide sobre un documento
+  // que está a punto de sustituirse: el header salía medido a 5900 px de scroll.
+  const ficha = 'v=' + Date.now();
+  marco.src = '../index.html?' + ficha;
+  const cargo = await esperarA(() => {
+    try {
+      const cw = marco.contentWindow;
+      return cw.location.href.includes(ficha) && cw.document.readyState === 'complete';
+    } catch (e) { return false; }
+  }, 20000);
+  if (!cargo) { salida.innerHTML = '<p>el sitio no terminó de cargar</p>'; return; }
   const w = marco.contentWindow, d = w.document;
   await esperar(2000);
 
@@ -422,6 +435,33 @@ async function correr() {
   }
   comprobar('el interruptor de idioma no pisa ningún rótulo',
     pisados.length === 0, pisados.join('  ') || 'con holgura en las cuatro secciones');
+
+  // ---- el fondo es el mismo en todas las secciones oscuras ---------------
+  // El grano lo siembra el motor aparte (GRANO), igual en cada lienzo. Antes
+  // salía de cada imagen y el gato y problemas llevaban 2.2 y 2.5 veces más.
+  const granoDe = async (sel, zona, y) => {
+    w.scrollTo(0, y); await esperar(700);
+    const c = d.querySelector(sel), W = c.width, H = c.height;
+    let suma = 0;
+    for (let k = 0; k < 4; k++) {
+      const im = c.getContext('2d').getImageData(zona[0]*W|0, zona[1]*H|0,
+        (zona[2]-zona[0])*W|0, (zona[3]-zona[1])*H|0).data;
+      let n = 0, lit = 0;
+      for (let i = 0; i < im.length; i += 4) { n++; if (im[i] > 22) lit++; }
+      suma += lit / n; await esperar(80);
+    }
+    return suma / 4 * 100;
+  };
+  const topDe = (id) => d.getElementById(id).getBoundingClientRect().top + w.scrollY;
+  const granos = {
+    header: await granoDe('#dust', movil ? [0.05, 0.60, 0.40, 0.80] : [0.02, 0.62, 0.16, 0.86], 0),
+    gato:   await granoDe('#gatoCanvas', movil ? [0.60, 0.04, 0.95, 0.16] : [0.80, 0.05, 0.97, 0.30], topDe('gato') + 200),
+    problemas: await granoDe('#probsCanvas', movil ? [0.03, 0.02, 0.40, 0.12] : [0.03, 0.05, 0.25, 0.30], topDe('probs') + 20)
+  };
+  const vals = Object.values(granos);
+  comprobar('el grano de fondo es el mismo en las secciones oscuras',
+    Math.max(...vals) / Math.min(...vals) < 1.25,
+    Object.entries(granos).map(([k, v]) => k + ' ' + v.toFixed(2) + '%').join('  '));
 
   // ---- sin scroll horizontal en toda la página ---------------------------
   comprobar('la página no se desplaza en horizontal',
