@@ -359,6 +359,14 @@ async function correr() {
 
   const leerCintas = () => ({ t: tx('.quehace__titular'), f: tx('.quehace__fases'),
     q: +(-mano.getBoundingClientRect().top / mRec).toFixed(2), y: w.scrollY });
+  // Qué letras llevan transformación en un punto fijo, antes de recorrer el
+  // campo. Al final se vuelve a ese punto: tienen que ser exactamente las
+  // mismas, o alguna se habría quedado torcida.
+  const movidasEn = () => Array.from(d.querySelectorAll('#quehace .let'))
+    .map((e, i) => (e.style.transform ? i : -1)).filter((i) => i >= 0).join(',');
+  await irMano(0.02);
+  const movidasAntes = movidasEn();
+
   await irMano(0.15);
   const a = leerCintas();
   await irMano(0.65);
@@ -403,11 +411,65 @@ async function correr() {
     encima.length === 0,
     encima.length ? encima.slice(0, 6).join(' ') + ` (${encima.length})` : 'campo despejado en los 4 tramos');
 
+  // Ninguna letra puede pisar a otra, ni de su palabra ni de otra línea. Esto
+  // pilló un fallo que la vista no aclaraba: con un campo distinto por letra y
+  // una lente que no medía bien el espacio entre líneas, la palabra clave de
+  // un párrafo acababa montada en la línea de debajo (el 12% de las letras
+  // movidas pisaban a otra).
+  //
+  // Con cajas orientadas. getBoundingClientRect da la caja alineada con los
+  // ejes que envuelve a la letra girada, hasta un 40% más ancha que la letra:
+  // dos letras giradas que sólo se tocan, como en un texto sobre una curva,
+  // salían pisadas. Se usa el centro real, el tamaño sin girar por su escala y
+  // la comparación en el marco girado.
+  //
+  // Se admite hasta un 4%: en escritorio el párrafo cruza la muñeca y en el
+  // núcleo el espacio baja de 0.3, así que ni al tamaño mínimo cabe todo.
+  const pisadas = [];
+  let peor = 0;
+  for (const q of [0.2, 0.62, 0.88]) {
+    await irMano(q);
+    const info = Array.from(d.querySelectorAll('#quehace .let'))
+      .filter((l) => l.style.transform)
+      .map((l) => {
+        const t = l.style.transform, e = t.match(/scale\(([\d.]+)\)/), g = t.match(/rotate\(([-\d.]+)deg\)/);
+        const r = l.getBoundingClientRect(), esc = e ? +e[1] : 1;
+        return { cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2,
+          w: l.offsetWidth * esc, h: l.offsetHeight * esc, th: (g ? +g[1] : 0) * Math.PI / 180,
+          vis: r.right > 0 && r.left < VW && r.bottom > 0 && r.top < VH };
+      })
+      .filter((o) => o.vis);
+    let n = 0;
+    for (let i = 0; i < info.length; i++) for (let j = i + 1; j < info.length; j++) {
+      const A = info[i], B = info[j];
+      if (Math.abs(A.cx - B.cx) > A.w + B.w + 4 || Math.abs(A.cy - B.cy) > A.h + B.h + 4) continue;
+      const th = (A.th + B.th) / 2, c = Math.cos(-th), sn = Math.sin(-th);
+      const dx = B.cx - A.cx, dy = B.cy - A.cy;
+      const ox = Math.max(0, (A.w + B.w) / 2 - Math.abs(dx * c - dy * sn));
+      const oy = Math.max(0, (A.h + B.h) / 2 - Math.abs(dx * sn + dy * c));
+      if (ox * oy / (Math.min(A.w * A.h, B.w * B.h) || 1) > 0.3) n++;
+    }
+    const pct = info.length ? n / info.length * 100 : 0;
+    if (pct > peor) peor = pct;
+    pisadas.push(q + '→' + n + '/' + info.length);
+  }
+  comprobar('mano: ninguna letra pisa a otra',
+    peor <= 4, pisadas.join('  ') + '  (peor ' + peor.toFixed(1) + '%, se admite 4%)');
+
   // Fuera del campo la letra tiene que volver a su sitio, no quedarse torcida.
+  // Antes se contaba contra un umbral —menos de 40 movidas al entrar—, pero
+  // en móvil el titular ya roza los dedos al entrar y esas letras están
+  // dentro del campo con todo derecho. Lo que importa es que no haya nada
+  // olvidado: tras recorrer el campo entero, en el mismo punto tienen que
+  // estar movidas exactamente las mismas letras.
   await irMano(0.02);
-  const torcidas = Array.from(d.querySelectorAll('.let')).filter((e) => e.style.transform).length;
+  const movidasDespues = movidasEn();
+  const cuantas = movidasAntes ? movidasAntes.split(',').length : 0;
   comprobar('mano: fuera del campo las letras vuelven a su sitio',
-    torcidas < 40, `${torcidas} con transformación al entrar`);
+    movidasDespues === movidasAntes,
+    movidasDespues === movidasAntes
+      ? `las mismas ${cuantas} movidas antes y después de recorrer el campo`
+      : `${cuantas} movidas antes, ${movidasDespues ? movidasDespues.split(',').length : 0} después`);
 
   // las píldoras siguen a la cinta
   await irMano(0.12);

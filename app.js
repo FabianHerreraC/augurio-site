@@ -607,7 +607,8 @@ const GRANO = {
   const REMOLINO = 0.28;   // giro alrededor del centro, en radianes, junto a él
   const GIRO = 12;         // grados de giro máximo de la letra
   const ENCOGE = 0.05;     // cuánto se encoge la letra junto a la mano, además
-  const MENOR = 0.5;       // la letra más pequeña que deja la compresión
+  const MENOR = 0.3;       // la letra más pequeña que deja la compresión
+  const MENOR_TITULAR = 0.6; // en el titular: sus letras van muy separadas
 
   let campo = null;        // { hx, hy, perfil } centro y perfil, en px del marco
 
@@ -685,14 +686,14 @@ const GRANO = {
     const cerrado = new Float32Array(K);
     for (let b = 0; b < K; b++) {
       let m = 0;
-      for (let k = -3; k <= 3; k++) m = Math.max(m, crudo[(b + k + K) % K]);
+      for (let k = -2; k <= 2; k++) m = Math.max(m, crudo[(b + k + K) % K]);
       cerrado[b] = m;
     }
     const perfil = new Float32Array(K);
     for (let b = 0; b < K; b++) {
       let suma = 0;
-      for (let k = -4; k <= 4; k++) suma += cerrado[(b + k + K) % K];
-      perfil[b] = Math.max(suma / 9, crudo[(b - 1 + K) % K], crudo[b], crudo[(b + 1) % K]);
+      for (let k = -2; k <= 2; k++) suma += cerrado[(b + k + K) % K];
+      perfil[b] = Math.max(suma / 5, crudo[(b - 1 + K) % K], crudo[b], crudo[(b + 1) % K]);
     }
     campo = { hx, hy, perfil };
     return true;
@@ -730,6 +731,13 @@ const GRANO = {
   // obliga al navegador a recalcular la maquetación de las mil y pico letras,
   // y el cuadro pasa de milisegundos a casi un segundo.
   let desT = 0, desF = 0, centrosFase = [];
+  // El cuerpo con que se agranda el hueco es uno por cinta: el del glifo más
+  // grande. Si cada letra usara el suyo, cada una se movería con un campo
+  // distinto —una «m» y una «i» vecinas, o la clave en negrita y la línea de
+  // debajo—, y la garantía de que dos letras no se cruzan sólo vale dentro de
+  // una misma transformación: la palabra clave acababa montada en la línea
+  // siguiente. Tomar el mayor asegura además la holgura de todas.
+  const cuerpoCinta = { titular: 0, fases: 0 };
 
   function escribir() {
     const t = T().mano;
@@ -768,6 +776,7 @@ const GRANO = {
       .map((c) => c.offsetLeft + c.offsetWidth / 2);
 
     letras = [];
+    cuerpoCinta.titular = 0; cuerpoCinta.fases = 0;
     [[titular, 'titular'], [fases, 'fases']].forEach(function ([raiz, cinta]) {
       // Se mide en reposo. Si las letras llevaran puesto el empuje del último
       // cuadro —pasa al redimensionar—, su posición desplazada quedaría
@@ -786,9 +795,11 @@ const GRANO = {
           r: Math.hypot(r.width, r.height) * 0.35,
           // cuánto gira: completo en letras de texto, menos en las gigantes
           kGiro: Math.min(1, 24 / Math.max(1, r.height)),
+          h: r.height,
           puesta: false });
       });
     });
+    letras.forEach((L) => { if (L.r > cuerpoCinta[L.cinta]) cuerpoCinta[L.cinta] = L.r; });
   }
 
   /* ---- recorrido ---- */
@@ -852,31 +863,59 @@ const GRANO = {
       const esT = L.cinta === 'titular';
       const x = L.x + (esT ? tT : tF);
       const y = L.y + (esT ? desT : desF);
-      const cuerpo = L.r + HOLGURA;
+      const cuerpo = cuerpoCinta[L.cinta] + HOLGURA;
 
       // Fuera del alcance el campo es exactamente cero: la letra en su sitio.
-      // Se mira con un poco de margen porque las muestras de la compresión
-      // caen a 2 px y el giro puede llevar la dirección a un hueco mayor.
+      // El corte llega hasta donde alcanzan las muestras de la compresión, que
+      // se toman a la distancia de las vecinas: si no, la letra de justo fuera
+      // iría a tamaño 1 y la de justo dentro ya encogida, un salto de tamaño.
       const r = Math.hypot(x - hx, y - hy);
-      if (r >= (perfilEn(Math.atan2(y - hy, x - hx)) + cuerpo) * ALCANCE * 1.05 + D) {
+      const muestras = Math.max(D, 0.3 * L.h, esT ? 0 : 0.6 * L.h);
+      if (r >= (perfilEn(Math.atan2(y - hy, x - hx)) + cuerpo) * ALCANCE * 1.05 + muestras) {
         if (L.puesta) { L.el.style.transform = ''; L.el.style.opacity = ''; L.puesta = false; }
         continue;
       }
 
-      // Cuánto se comprime el espacio alrededor de la letra, en horizontal y
-      // en vertical. Emitir desde un centro conservando el área obliga a
-      // comprimir en la dirección radial, y a los lados de la mano esa
-      // dirección es la de la línea: las letras se pisaban. Se encogen en la
-      // misma medida que el espacio, como un texto visto por una lente, y
-      // así caben sin tocarse.
-      mapa(x - D, y, cuerpo); const ax = mX, ay = mY;
-      mapa(x + D, y, cuerpo); const bx = mX, by = mY;
-      mapa(x, y - D, cuerpo); const cx = mX, cy = mY;
-      mapa(x, y + D, cuerpo); const ex = mX, ey = mY;
-      const kx = Math.hypot(bx - ax, by - ay) / (2 * D);
-      const ky = Math.hypot(ex - cx, ey - cy) / (2 * D);
-      let k = Math.min(kx, ky, 1);
-      if (k < MENOR) k = MENOR;
+      // Cuánto se comprime el espacio alrededor de la letra. Emitir desde un
+      // centro conservando el área obliga a comprimir en la dirección radial;
+      // la letra se encoge en la misma medida, como un texto visto por una
+      // lente, y así cabe sin tocar a sus vecinas.
+      //
+      // Hacen falta dos medidas. A lo largo de la línea, cuánto se estira un
+      // segmento horizontal (kx): si baja de 1, las letras de la palabra se
+      // juntan. Y entre líneas, la distancia perpendicular entre la línea y
+      // la siguiente ya deformadas: el área local (el determinante) dividida
+      // por kx. No vale medir cuánto se alarga un segmento vertical, porque el
+      // remolino lo tuerce sin acortarlo: bajo la palma, donde la línea se
+      // estira al doble, el espacio con la de abajo se queda en la mitad y un
+      // segmento vertical lo daba por intacto. La clave en negrita acababa
+      // montada en la línea siguiente.
+      //
+      // Y se mide a la escala de las vecinas, no en un punto: lo que decide si
+      // dos letras chocan es cuánto se acercan entre ellas, y la de al lado
+      // está a media letra y la de abajo a una línea. Junto al borde del hueco
+      // la compresión cambia tan deprisa que la medida puntual la subestimaba
+      // y en la muñeca las letras se amontonaban.
+      // El titular es una sola línea: no tiene vecina de abajo que medir.
+      const dx = Math.max(D, 0.3 * L.h), dy = esT ? D : Math.max(D, 0.6 * L.h);
+      mapa(x - dx, y, cuerpo); const ax = mX, ay = mY;
+      mapa(x + dx, y, cuerpo); const bx = mX, by = mY;
+      mapa(x, y - dy, cuerpo); const cx = mX, cy = mY;
+      mapa(x, y + dy, cuerpo); const ex = mX, ey = mY;
+      const jxx = (bx - ax) / (2 * dx), jxy = (by - ay) / (2 * dx);
+      const jyx = (ex - cx) / (2 * dy), jyy = (ey - cy) / (2 * dy);
+      const kx = Math.hypot(jxx, jxy);
+      const kEntre = Math.abs(jxx * jyy - jxy * jyx) / Math.max(kx, 1e-6);
+      // Donde el campo aprieta más —a la altura de la muñeca en escritorio—
+      // el espacio baja de la mitad, y una letra a medio tamaño ya no cabe. Se
+      // deja encoger hasta 0.3: probado contra desvanecerlas por debajo de la
+      // mitad, pisan igual de poco y no se pierde ninguna.
+      let k = Math.min(kx, kEntre, 1);
+      // El titular tiene su propio mínimo. Sus letras miden 150 px y van muy
+      // separadas: no les hace falta encogerse tanto para no pisarse, y
+      // bajarlas a 0.3 al pasar por las puntas de los dedos era un tirón.
+      const menor = esT ? MENOR_TITULAR : MENOR;
+      if (k < menor) k = menor;
 
       mapa(x, y, cuerpo);
       const desX = mX - x, desY = mY - y;
