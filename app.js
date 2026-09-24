@@ -8,7 +8,6 @@ const TEXTOS = {
     header: {
       nav: ['INICIO', 'TEORIA', 'CONTACTO'],
       seccion: 'INICIO',
-      cita: '\u201cNo sentí que Augurio me dijera quiénes éramos, sino que por fin pudimos ver con claridad qué nos hacía valiosos como organización. Fue la primera vez que sentí que nos escuchaban de verdad, sin encasillarnos en una categoría genérica.\u201d',
       menu: 'Menú',
       bajar: 'Ir a la siguiente sección'
     },
@@ -65,7 +64,6 @@ const TEXTOS = {
     header: {
       nav: ['HOME', 'THEORY', 'CONTACT'],
       seccion: 'HOME',
-      cita: '\u201cI didn\u2019t feel that Augurio told us who we were; I felt that we could finally see clearly what made us valuable as an organization. It was the first time I felt we were truly heard, instead of being filed under some generic category.\u201d',
       menu: 'Menu',
       bajar: 'Go to the next section'
     },
@@ -1547,7 +1545,6 @@ function createDifuminado(canvas, opts) {
     const enlaces = document.querySelectorAll('.header__enlace');
     enlaces.forEach((e, i) => { if (t.header.nav[i]) e.textContent = t.header.nav[i]; });
     poner('.header__seccion', t.header.seccion);
-    poner('#headerCita', t.header.cita);
     poner('#headerMenuTexto', t.header.menu);
     poner('.header__bajar .sr-only', t.header.bajar);
 

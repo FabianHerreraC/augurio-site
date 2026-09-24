@@ -210,13 +210,13 @@ y acababa midiendo 6.5em de ancho. Hay que anularlo en `.pal` y `.let`.
 
 En escritorio el logo va pequeño en la barra de arriba, con el menú a la
 derecha y la frase centrada. En móvil el logo baja al centro, entre las dos
-figuras; la cita sube arriba; la frase baja al 75%; y los tres enlaces se
+figuras; la frase baja al 75%; y los tres enlaces se
 pliegan detrás del punto blanco. No es el mismo bloque movido: son dos
 composiciones, y por eso `--tagline-y` se redefine en el corte de móvil.
 
 ### El canal izquierdo del header sale de un margen único
 
-El interruptor de idioma, el rótulo vertical y —en móvil— la cita se apoyan en
+El interruptor de idioma y el rótulo vertical se apoyan en
 `--margen`. No basta con darles el mismo `left`: el texto vertical centra sus
 glifos girados sobre la línea base central, así que su tinta cae ~1.5 px por
 dentro. Por eso `.header__seccion` lleva `margin-left: -0.15em`, en em para que
@@ -244,16 +244,6 @@ porque ese fallo no daría ningún error.
 
 Medido: el fondo pinta a los ~300 ms, el contenido entra sobre el segundo 1 y
 la cita completa su fundido hacia el 7.
-
-### El testimonio del header entra con retardo
-
-`.header__cita` arranca en opacidad 0 y sube con un `animation` de 4.5 s y dos
-segundos de retardo, que cuentan **desde que el header se revela** y no desde
-que carga la página: si el fondo tarda, la cita no puede haberse consumido su
-entrada mientras estaba oculta. Por eso la animación cuelga de `.is-listo`. Va en CSS y no en JS porque no depende de nada más que de
-que la página se pinte. El riesgo es que un cambio lo deje clavado en 0 sin
-dar ningún error, así que la sonda espera a que el fundido termine en vez de
-medir y seguir.
 
 ### font-size en porcentaje no escala con el ancho
 
@@ -440,3 +430,6 @@ nada malo.
 `sips --cropOffset` desplaza **desde la esquina superior izquierda**, pero falla
 en silencio con algunos PNG grandes y devuelve parches en negro. Si pasa, se
 extrae el recorte con un canvas en el navegador.
+
+
+El testimonio del header («No sentí que Augurio me dijera…») se quitó el 2026-09-23.

@@ -5,7 +5,7 @@
   --logo-y: 19.2%;
   --tagline-y: 49.6%;   /* header3.png la centra verticalmente */
   /* Margen izquierdo único: lo comparten el interruptor de idioma, el rótulo
-     vertical y la cita. Si cambia, se mueven los tres a la vez. */
+     vertical. Si cambia, se mueven los dos a la vez. */
   --margen: clamp(18px, 2.1vw, 44px);
   /* Diámetro del punto de menú. Lo comparte el interruptor de idioma, que en
      móvil toma esa misma altura para que los dos centros coincidan. */
@@ -135,44 +135,6 @@ html, body {
   font-size: max(9px, 0.7vw);
   font-weight: 700;
   letter-spacing: 0.16em;
-  color: #fff;
-}
-
-/* El testimonio, centrado abajo. Entra solo, dos segundos después de cargar y
-   con un fundido muy lento: no compite con el logo ni con la frase, que ya
-   están escribiéndose. Va en CSS y no en JS porque no depende de nada más. */
-.header__cita {
-  position: absolute;
-  left: 50%;
-  bottom: 2.1%;
-  transform: translateX(-50%);
-  width: 40.2%;
-  margin: 0;
-  text-align: center;
-  opacity: 0;
-}
-
-/* Los dos segundos de espera cuentan desde que el header se revela, no desde
-   que carga la página: si el fondo tarda, la cita no puede haberse consumido
-   su entrada mientras estaba oculta. */
-.is-listo .header__cita {
-  animation: cita-entra 4.5s ease-in-out 2s forwards;
-}
-
-@keyframes cita-entra {
-  from { opacity: 0; }
-  to   { opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .header__cita, .is-listo .header__cita { opacity: 1; animation: none; }
-}
-
-.header__cita p {
-  margin: 0;
-  font-size: max(9px, 0.57vw);
-  font-weight: 700;
-  line-height: 1.4;
   color: #fff;
 }
 
@@ -789,8 +751,8 @@ html, body {
 @media (max-width: 900px) {
 
   /* ---- header ----
-     Otra composición: la cita sube arriba, el logo baja al centro entre las
-     dos figuras, la frase baja al 75% y el menú se pliega detrás de un punto.
+     Otra composición: el logo baja al centro entre las dos figuras, la frase
+     baja al 75% y el menú se pliega detrás de un punto.
      Medidas de "header mobile3.png" (984 x 1586). */
   .header { --tagline-y: 75.3%; }
 
@@ -844,18 +806,6 @@ html, body {
     height: var(--bolita);
     transform: none;
   }
-
-  .header__cita {
-    left: var(--margen);
-    right: 30.5%;
-    bottom: auto;
-    top: 13.8%;
-    width: auto;
-    transform: none;
-    text-align: left;
-  }
-
-  .header__cita p { font-size: max(11px, 2.85vw); line-height: 1.45; }
 
   .header__seccion { left: var(--margen); bottom: 4.1%; font-size: 9px; }
 

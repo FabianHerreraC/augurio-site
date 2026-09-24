@@ -139,12 +139,12 @@ async function correr() {
   await esperar(500);
 
   const hLogo = rect(d, '.header__logo'), hTag = rect(d, '.tagline');
-  const hCita = rect(d, '.header__cita'), hBaj = rect(d, '.header__bajar');
+  const hBaj = rect(d, '.header__bajar');
   const hSec = rect(d, '.header__seccion');
-  comprobar('header: los seis elementos están y caben en pantalla',
-    [hLogo, hTag, hCita, hBaj, hSec].every((r) => r && r.w > 0 &&
+  comprobar('header: los cinco elementos están y caben en pantalla',
+    [hLogo, hTag, hBaj, hSec].every((r) => r && r.w > 0 &&
       r.x >= -1 && r.x + r.w <= VW + 1 && r.y >= -1 && r.y + r.h <= VH + 1),
-    `logo ${hLogo.w}px · cita ${hCita.w}x${hCita.h} · flecha ${hBaj.w}px`);
+    `logo ${hLogo.w}px · frase ${hTag.w}px · flecha ${hBaj.w}px`);
 
   // el logo sube a la barra en escritorio y baja al centro en móvil
   comprobar('header: el logo cae donde lo pone la maqueta',
@@ -210,7 +210,7 @@ async function correr() {
   const margen = w.getComputedStyle(d.documentElement).getPropertyValue('--margen');
   const izqDe = (sel) => w.getComputedStyle(d.querySelector(sel)).left;
   const anclados = movil
-    ? ['.idioma', '.header__seccion', '.header__cita']
+    ? ['.idioma', '.header__seccion']
     : ['.idioma', '.header__seccion'];
   const lefts = anclados.map(izqDe);
   comprobar('header: el canal izquierdo sale de un único margen',
@@ -225,18 +225,6 @@ async function correr() {
   const desfase = Math.abs(centroDe('.idioma') - centroDe(refEje));
   comprobar('header: el interruptor comparte eje con ' + (movil ? 'el punto' : 'el logo'),
     desfase < 1, `desfase ${desfase.toFixed(2)}px`);
-
-  // El testimonio entra solo: un segundo quieto y luego un fundido lento. Si
-  // se quedara en opacidad 0 no habría ningún error en consola, así que se
-  // espera a que termine en vez de dar por hecho que está.
-  const elCita = d.querySelector('.header__cita');
-  let opCita = 0;
-  for (let i = 0; i < 40 && opCita < 0.99; i++) {
-    await esperar(150);
-    opCita = +w.getComputedStyle(elCita).opacity;
-  }
-  comprobar('header: el testimonio termina visible tras su fundido',
-    opCita > 0.95, `opacidad ${opCita}`);
 
   // ---- gato: coreografía de scroll ---------------------------------------
   const gato = seccion('gato');
