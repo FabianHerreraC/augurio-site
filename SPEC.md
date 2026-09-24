@@ -293,6 +293,22 @@ correr **sin error en consola**. Así desaparecieron los textos de la mano.
 mientras se teclea. Depende de `visibility: hidden` en el CSS. Si esa regla se
 borra, **el titular se dibuja dos veces**.
 
+### El texto del polígono va en su parte ancha
+
+El pentágono es ancho arriba y se estrecha hacia una punta inferior desplazada
+a la izquierda. La frase más larga ocupa cuatro líneas, y con el texto bajo
+(46.8% en móvil, 42.4% en escritorio) la última salía por el lado diagonal en
+móvil —7 px fuera— y en escritorio quedaba a menos de un píxel del lado
+inferior izquierdo, mientras sobraban 16–42 px arriba. Ahora va a 43.5% en
+móvil y 41.8% en escritorio.
+
+Margen mínimo medido en las 10 frases, las dos lenguas: 2.7 px a 360, 8.7 a 390,
+3.9 a 1024, 5.2 a 1440, 7.1 a 1920.
+
+La sonda comprobaba antes la altura del texto contra la caja del polígono, y
+eso no ve la forma: pasaba con la línea fuera. Ahora mira cada esquina de cada
+línea contra el polígono ya dibujado, tras el morfeo, y exige 1 px de margen.
+
 ### El polígono le roba los clics al menú
 
 `.probs__poli` es un SVG que cubre el marco entero y va después del menú en el

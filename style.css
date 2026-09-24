@@ -632,10 +632,14 @@ html, body {
 }
 
 /* la mitad de la frase que va sobre el polígono */
+/* La frase más larga ocupa cuatro líneas, y a 42.4% la esquina inferior de la
+   última quedaba a menos de un píxel del lado inferior izquierdo del
+   pentágono. Subida a 41.8%, el margen queda repartido: unos 10 px arriba y
+   10 abajo. */
 .probs__arriba {
   position: absolute;
   left: 45.2%;
-  top: 42.4%;
+  top: 41.8%;
   width: 11.4%;
   margin: 0;
   font-style: italic;
@@ -968,11 +972,15 @@ html, body {
     transform: translate(2.52%, 4.99%) scale(3.544, 1.988);
   }
 
+  /* El pentágono es ancho arriba y se estrecha hacia abajo, con la punta
+     inferior a la izquierda. Con el texto a 46.8% sobraban 42 px arriba y la
+     cuarta línea de la frase más larga salía por el lado diagonal: el texto va
+     en la parte ancha. */
   .probs__arriba {
     position: absolute;
     left: 37%;
     right: 29%;
-    top: 46.8%;
+    top: 43.5%;
     width: auto;
     background: none;
     padding: 0;

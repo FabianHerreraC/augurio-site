@@ -309,17 +309,51 @@ async function correr() {
   comprobar('problemas: los 10 puntos del menú reciben el toque',
     alcanzables === puntos.length, `${alcanzables}/${puntos.length} alcanzables`);
 
-  // la mitad de la frase tiene que caber dentro del polígono, en las 10
-  let desborde = 0;
-  const arriba = d.querySelector('.probs__arriba');
+  // La mitad de la frase tiene que caber dentro del polígono, en las 10.
+  //
+  // Antes se comparaba la altura del texto con la de la caja del polígono, y
+  // eso no ve la forma: el pentágono es ancho arriba y se estrecha hacia una
+  // punta inferior desplazada, así que la última línea de la frase más larga
+  // salía por el lado diagonal y la comprobación pasaba igual. Ahora se mira
+  // cada esquina de cada línea contra el polígono ya dibujado —con el encuadre
+  // y las transformaciones de móvil aplicadas—, después de que acabe de
+  // cambiar de forma.
+  const arriba = d.getElementById('probsArriba');
   const poli = d.getElementById('probsPoli');
+  const verticesPoli = () => {
+    const m = poli.getScreenCTM(), pt = poli.ownerSVGElement.createSVGPoint();
+    return Array.from(poli.points).map((v) => { pt.x = v.x; pt.y = v.y; const q = pt.matrixTransform(m); return [q.x, q.y]; });
+  };
+  // distancia con signo al borde: negativa dentro
+  const alBorde = (px, py, V) => {
+    let dentro = false, dmin = Infinity;
+    for (let i = 0, j = V.length - 1; i < V.length; j = i++) {
+      const [xi, yi] = V[i], [xj, yj] = V[j];
+      if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) dentro = !dentro;
+      const dx = xj - xi, dy = yj - yi;
+      const t = Math.max(0, Math.min(1, ((px - xi) * dx + (py - yi) * dy) / (dx * dx + dy * dy)));
+      dmin = Math.min(dmin, Math.hypot(px - (xi + t * dx), py - (yi + t * dy)));
+    }
+    return dentro ? -dmin : dmin;
+  };
+  const fueraDe = [];
+  let holguraPoli = Infinity;
   for (let i = 0; i < puntos.length; i++) {
     puntos[i].click();
-    await esperar(300);
-    if (arriba.getBoundingClientRect().height > poli.getBoundingClientRect().height * 0.68) desborde++;
+    await esperar(1400);                          // 900 ms de morfeo y el fundido
+    const V = verticesPoli();
+    const rango = d.createRange(); rango.selectNodeContents(arriba);
+    let peor = -Infinity;
+    for (const r of Array.from(rango.getClientRects()).filter((r) => r.width > 1))
+      for (const [x, y] of [[r.left, r.top], [r.right, r.top], [r.left, r.bottom], [r.right, r.bottom]])
+        peor = Math.max(peor, alBorde(x, y, V));
+    if (peor > -1) fueraDe.push((i + 1) + ' (' + peor.toFixed(1) + ' px)');
+    holguraPoli = Math.min(holguraPoli, -peor);
   }
   comprobar('problemas: las 10 frases caben en el polígono',
-    desborde === 0, desborde ? `${desborde} se desbordan` : 'ninguna se desborda');
+    fueraDe.length === 0,
+    fueraDe.length ? 'fuera o pegadas al borde: ' + fueraDe.join(', ')
+                   : 'las 10 dentro, margen mínimo ' + holguraPoli.toFixed(1) + ' px');
 
   // ---- mano --------------------------------------------------------------
   const mano = seccion('quehace');
