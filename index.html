@@ -136,16 +136,34 @@
         </div>
         <p class="sr-only" id="quehaceTitularSR"></p>
 
-        <!-- Las fases: una cinta que viaja en sentido contrario. El orden del
-             DOM es 1,2,3,4 y se invierte visualmente con row-reverse, para que
-             la primera en entrar sea Conversación aunque la cinta vaya hacia
-             la derecha. -->
-        <div class="quehace__pista quehace__pista--fases">
-          <div class="quehace__fases" id="quehaceFases">
-            <p class="quehace__fase" data-n="0"></p>
-            <p class="quehace__fase" data-n="1"></p>
-            <p class="quehace__fase" data-n="2"></p>
-            <p class="quehace__fase" data-n="3"></p>
+        <!-- Las fases. En escritorio las cuatro a la vez, en dos columnas que
+             flanquean la mano; en móvil una cada vez, en la franja de debajo.
+             El scroll enciende la activa. Sin campo: el empuje se queda en el
+             titular, que es donde se lee como efecto. -->
+        <div class="quehace__fases" id="quehaceFases">
+          <div class="quehace__col quehace__col--izq">
+            <article class="fase" data-n="0">
+              <p class="fase__num" aria-hidden="true">01</p>
+              <h3 class="fase__clave"></h3>
+              <p class="fase__texto"></p>
+            </article>
+            <article class="fase" data-n="1">
+              <p class="fase__num" aria-hidden="true">02</p>
+              <h3 class="fase__clave"></h3>
+              <p class="fase__texto"></p>
+            </article>
+          </div>
+          <div class="quehace__col quehace__col--der">
+            <article class="fase" data-n="2">
+              <p class="fase__num" aria-hidden="true">03</p>
+              <h3 class="fase__clave"></h3>
+              <p class="fase__texto"></p>
+            </article>
+            <article class="fase" data-n="3">
+              <p class="fase__num" aria-hidden="true">04</p>
+              <h3 class="fase__clave"></h3>
+              <p class="fase__texto"></p>
+            </article>
           </div>
         </div>
 

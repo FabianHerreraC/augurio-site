@@ -34,10 +34,10 @@ const TEXTOS = {
       titular: 'Usamos tecnología para orquestar conversaciones reveladoras.',
       pildoras: ['Conversación', 'Captura', 'Análisis', 'Visualización'],
       fases: [
-        ['Conversación_', 'Antes de construir nada, se definen las reglas de un buen diálogo (profundidad, contraste, ausencia de sesgo y capacidad de revelación), apoyadas en cuestionamiento crítico e imágenes evocadoras en vez de preguntas cerradas.'],
-        ['Captura_', 'Las personas tienen una conversación colectiva asistida por IA, siguiendo esas reglas, y cada intercambio queda guardado en una base de datos, organizado por sesión.'],
-        ['Análisis_', 'Las conversaciones almacenadas se procesan con IA para encontrar patrones y contrastar respuestas entre participantes. De ahí surgen los hallazgos que explican qué es la organización y qué la hace valiosa y distinta.'],
-        ['Visualización_', 'Esos hallazgos se traducen en formatos gráficos predefinidos, como grafos, mapas de calor o cronogramas, usando specs ya probadas en proyectos anteriores. El resultado es una sesión visual personalizada que la organización puede leer de un vistazo.']
+        ['Conversación_', 'El agente habla poco y pregunta claro, y deja a cada persona la libertad de irse por la tangente. En lugar de preguntar de frente, propone imágenes —«si la admisión fuera una puerta, ¿cómo sería?»— que obligan a construir el sentido en vez de repetir un reflejo.'],
+        ['Captura_', 'Importa qué se dijo y también cómo se dijo. Guardamos las pausas, las autocorrecciones —donde suele estar una idea formándose en vivo— y el desacuerdo que llega tarde y con rodeos: un «sí, aunque…» es muchas veces un no dicho con cuidado.'],
+        ['Análisis_', 'Cada área de una organización habla su propia lengua: la comercial, la técnica, quien lleva veinte años y quien lleva dos. Esas voces llegan separadas hasta el final, sin fundirse en un promedio, y el desacuerdo se muestra como parte de lo que la organización sabe de sí misma.'],
+        ['Visualización_', 'Antes de entregarse, cada ficha pasa una auditoría: que hablaron todos los afectados, que nadie fue silenciado y que el resultado se sostiene por el mejor argumento, no por lo que esperaba quien encargó el ejercicio.']
       ]
     },
     probs: {
@@ -90,10 +90,10 @@ const TEXTOS = {
       titular: 'We use technology to orchestrate revealing conversations.',
       pildoras: ['Conversation', 'Capture', 'Analysis', 'Visualization'],
       fases: [
-        ['Conversation_', 'Before anything is built, the rules of a good dialogue are set out — depth, contrast, absence of bias and the capacity to reveal — grounded in critical questioning and evocative images rather than closed questions.'],
-        ['Capture_', 'People hold a collective conversation assisted by AI, following those rules, and every exchange is stored in a database, organized by session.'],
-        ['Analysis_', 'The stored conversations are processed with AI to find patterns and contrast answers across participants. From there come the findings that explain what the organization is and what makes it valuable and distinct.'],
-        ['Visualization_', 'Those findings are translated into predefined graphic formats — graphs, heat maps or timelines — using specs already proven in earlier projects. The result is a tailored visual session the organization can read at a glance.']
+        ['Conversation_', 'The agent says little and asks clearly, and leaves each person free to wander off on a tangent. Instead of asking head-on, it offers images —“if admissions were a door, what would it be like?”— that make people build the meaning rather than repeat a reflex.'],
+        ['Capture_', 'What was said matters, and so does how it was said. We keep the pauses, the self-corrections —where an idea is often taking shape live— and the disagreement that arrives late and hedged: a “yes, although…” is often a no said carefully.'],
+        ['Analysis_', 'Every part of an organization speaks its own language: sales, engineering, the person with twenty years and the one with two. Those voices stay separate all the way to the end, never blended into an average, and disagreement is shown as part of what the organization knows about itself.'],
+        ['Visualization_', 'Before it is delivered, every report passes an audit: that everyone affected got to speak, that no one was silenced, and that the result holds up on the strength of the best argument, not on what whoever commissioned the work expected.']
       ]
     },
     probs: {
@@ -552,18 +552,19 @@ const GRANO = {
 })();
 
 /* ---- sección "qué hace" ----
-   La mano se queda quieta y los textos la cruzan: el titular de derecha a
-   izquierda y la cinta de fases de izquierda a derecha, las dos atadas al
-   recorrido de la sección.
+   La mano se queda quieta y el titular la cruza de derecha a izquierda, atado
+   al recorrido de la sección. La mano lo dispersa al pasar: es un agujero
+   blanco que aparta y centrifuga sus letras (ver más abajo).
 
-   La mano lleva un campo elíptico que repele las letras: cada una se aparta
-   en la dirección que la aleja del centro, se encoge y se gira un poco, tanto
-   más cuanto más cerca esté. Ninguna llega a tocarla. */
+   Las fases no llevan campo. En escritorio están las cuatro a la vez en dos
+   columnas a los lados de la mano, y en móvil se ve una cada vez bajo ella;
+   el recorrido enciende la activa por cuartos. */
 (function () {
   const sec = document.getElementById('quehace');
   const marco = sec && sec.querySelector('.quehace__marco');
   const titular = document.getElementById('quehaceTitular');
   const fases = document.getElementById('quehaceFases');
+  const fasesEl = fases ? Array.from(fases.querySelectorAll('.fase')) : [];
   const progreso = document.getElementById('quehaceProgreso');
   const hitos = Array.from(document.querySelectorAll('.hito'));
   if (!sec || !marco || !titular || !fases) return;
@@ -722,41 +723,32 @@ const GRANO = {
 
   // letras con su posición en reposo, medida una vez por maquetación
   let letras = [];          // { el, cinta, x, y }
-  let anchoTitular = 0, anchoFases = 0, vw = 0, vh = 0;
+  let anchoTitular = 0, vw = 0, vh = 0;
   let marcoCaja = { left: 0, top: 0, width: 0, height: 0 };
-  // Desplazamientos de cada pista y centros de cada fase. Se guardan aquí y no
-  // se leen al pintar: leer offsetTop después de escribir transformaciones
-  // obliga al navegador a recalcular la maquetación de las mil y pico letras,
-  // y el cuadro pasa de milisegundos a casi un segundo.
-  let desT = 0, desF = 0, centrosFase = [];
+  // Desplazamiento de la pista del titular. Se guarda aquí y no se lee al
+  // pintar: leer offsetTop después de escribir transformaciones obliga al
+  // navegador a recalcular la maquetación de todas las letras en cada cuadro.
+  let desT = 0;
   // El cuerpo con que se agranda el hueco es uno por cinta: el del glifo más
   // grande. Si cada letra usara el suyo, cada una se movería con un campo
   // distinto —una «m» y una «i» vecinas, o la clave en negrita y la línea de
   // debajo—, y la garantía de que dos letras no se cruzan sólo vale dentro de
   // una misma transformación: la palabra clave acababa montada en la línea
   // siguiente. Tomar el mayor asegura además la holgura de todas.
-  const cuerpoCinta = { titular: 0, fases: 0 };
+  const cuerpoCinta = { titular: 0 };
 
   function escribir() {
     const t = T().mano;
     partir(titular, t.titular);
     const sr = document.getElementById('quehaceTitularSR');
     if (sr) sr.textContent = t.titular;
-    Array.from(fases.querySelectorAll('.quehace__fase')).forEach(function (p, i) {
+    // Las fases van como texto normal: sin campo no hace falta partirlas, y
+    // así se leen y se seleccionan como cualquier párrafo.
+    fasesEl.forEach(function (el, i) {
       const par = t.fases[i];
       if (!par) return;
-      // La clave va destacada, como en la maqueta. Se parte aparte para que
-      // sus letras lleven su propio cuerpo pero sigan siendo letras: el campo
-      // las busca con querySelectorAll('.let'), a cualquier profundidad.
-      p.textContent = '';
-      const clave = document.createElement('b');
-      clave.className = 'quehace__clave';
-      partir(clave, par[0]);
-      p.appendChild(clave);
-      p.appendChild(document.createTextNode(' '));
-      const resto = document.createElement('span');
-      partir(resto, par[1]);
-      p.appendChild(resto);
+      el.querySelector('.fase__clave').textContent = par[0];
+      el.querySelector('.fase__texto').textContent = par[1];
     });
     hitos.forEach((h, i) => { if (t.pildoras[i]) h.textContent = t.pildoras[i]; });
   }
@@ -766,16 +758,11 @@ const GRANO = {
     marcoCaja = { left: rm.left, top: rm.top, width: rm.width, height: rm.height };
     vw = rm.width; vh = rm.height;
     anchoTitular = titular.scrollWidth;
-    anchoFases = fases.scrollWidth;
-
     desT = titular.offsetTop + titular.parentElement.offsetTop;
-    desF = fases.offsetTop + fases.parentElement.offsetTop;
-    centrosFase = Array.from(fases.querySelectorAll('.quehace__fase'))
-      .map((c) => c.offsetLeft + c.offsetWidth / 2);
 
     letras = [];
-    cuerpoCinta.titular = 0; cuerpoCinta.fases = 0;
-    [[titular, 'titular'], [fases, 'fases']].forEach(function ([raiz, cinta]) {
+    cuerpoCinta.titular = 0;
+    [[titular, 'titular']].forEach(function ([raiz, cinta]) {
       // Se mide en reposo. Si las letras llevaran puesto el empuje del último
       // cuadro —pasa al redimensionar—, su posición desplazada quedaría
       // guardada como la de reposo.
@@ -808,15 +795,27 @@ const GRANO = {
     return Math.max(0, Math.min(1, -r.top / recorrido));
   }
 
-  // El titular entra por la derecha y sale por la izquierda; la cinta de
-  // fases hace lo contrario.
+  // El titular entra por la derecha y sale por la izquierda.
   const txTitular = (q) => vw - q * (vw + anchoTitular);
-  const txFases = (q) => -anchoFases + q * (anchoFases + vw);
+
+  // La fase activa va por cuartos del recorrido. La primera está encendida
+  // desde que la sección se ancla: así la presenta la maqueta, con
+  // «Conversación» activa nada más entrar.
+  const N_FASES = 4;
+  const faseDe = (q) => Math.min(N_FASES - 1, Math.floor(q * N_FASES));
+  let faseActiva = -1;
+  function ponerFase(q) {
+    const i = faseDe(q);
+    if (i === faseActiva) return;
+    faseActiva = i;
+    fasesEl.forEach((el, k) => el.classList.toggle('is-activo', k === i));
+    hitos.forEach((h, k) => h.classList.toggle('is-activo', k === i));
+  }
 
   function pintar(q) {
-    const tT = txTitular(q), tF = txFases(q);
+    const tT = txTitular(q);
     titular.style.transform = 'translate3d(' + tT.toFixed(1) + 'px,0,0)';
-    fases.style.transform = 'translate3d(' + tF.toFixed(1) + 'px,0,0)';
+    ponerFase(q);
 
     if (!campo) { if (progreso) progreso.textContent = Math.round(q * 100) + '%'; return; }
     const { hx, hy, perfil } = campo;
@@ -859,8 +858,8 @@ const GRANO = {
     for (let i = 0; i < letras.length; i++) {
       const L = letras[i];
       const esT = L.cinta === 'titular';
-      const x = L.x + (esT ? tT : tF);
-      const y = L.y + (esT ? desT : desF);
+      const x = L.x + tT;
+      const y = L.y + desT;
       const cuerpo = cuerpoCinta[L.cinta] + HOLGURA;
 
       // Fuera del alcance el campo es exactamente cero: la letra en su sitio.
@@ -935,28 +934,18 @@ const GRANO = {
     }
 
     if (progreso) progreso.textContent = Math.round(q * 100) + '%';
-
-    // la fase activa es la que tiene su centro más cerca del centro del marco
-    let cerca = 0, mejor = Infinity;
-    for (let i = 0; i < centrosFase.length; i++) {
-      const dist = Math.abs(centrosFase[i] + tF - vw / 2);
-      if (dist < mejor) { mejor = dist; cerca = i; }
-    }
-    hitos.forEach((h, i) => h.classList.toggle('is-activo', i === cerca));
   }
 
   /* ---- ir a una fase al pulsar su píldora ---- */
   hitos.forEach(function (h, i) {
     h.addEventListener('click', function () {
-      const centro = centrosFase[i];
-      if (centro === undefined) return;
-      // q tal que el centro de la fase caiga en el centro del marco
-      const q = (vw / 2 - centro + anchoFases) / (anchoFases + vw);
+      // al centro del cuarto de recorrido de esa fase
+      const q = (i + 0.5) / N_FASES;
       const alto = window.innerHeight || document.documentElement.clientHeight;
       const recorrido = sec.offsetHeight - alto;
       const arriba = sec.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({ top: Math.round(arriba + Math.max(0, Math.min(1, q)) * recorrido),
-        behavior: 'smooth' });
+      window.scrollTo({ top: Math.round(arriba + q * recorrido),
+        behavior: reducido ? 'auto' : 'smooth' });
     });
   });
 
@@ -1000,9 +989,13 @@ const GRANO = {
   });
 
   if (reducido) {
-    // sin movimiento: se deja la cinta a media altura del recorrido
+    // Sin movimiento: el titular se queda quieto a media pasada, pero las
+    // fases siguen encendiéndose con el scroll. Si se congelara todo, en
+    // móvil —donde se ve una fase cada vez— sólo se leería la tercera.
     pintar(0.5);
     window.removeEventListener('scroll', alScroll);
+    window.addEventListener('scroll', () => ponerFase(avance()), { passive: true });
+    ponerFase(avance());
   }
 })();
 

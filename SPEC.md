@@ -94,16 +94,34 @@ pantalla sin duplicar la instancia.
 
 Esta es la sección importante. Todo lo de aquí ya rompió algo al menos una vez.
 
-### La mano: dos cintas y un campo que repele
+### La mano: el titular cruza, las fases esperan a los lados
 
-El titular cruza de derecha a izquierda y la cinta de fases de izquierda a
-derecha, las dos atadas al avance de la sección. El DOM de las fases va 1,2,3,4
-y se invierte con `flex-direction: row-reverse`: yendo hacia la derecha, la
-primera en entrar es la que queda más a la derecha, así que sin invertir se
-leerían al revés.
+El titular cruza de derecha a izquierda atado al avance de la sección, y es lo
+único que la mano aparta: el campo (abajo) sólo actúa sobre sus letras. Se probó
+con los párrafos y se descartó: en texto de lectura el efecto estorba más de lo
+que luce.
 
-Cada letra va en su propio `inline-block` para poder empujarla, agrupadas por
-palabra para que el salto de línea siga cayendo entre palabras.
+Las fases son texto normal, sin partir en letras. Su contenido sale del marco
+teórico de Augurio —las cuatro tradiciones de la conversación fértil— sin
+nombrar autores: el agente que habla poco y pregunta con imágenes; leer cómo se
+dijo además de qué; las voces separadas sin promediar; la auditoría de cada
+ficha antes de entregarla.
+
+- **Escritorio:** las cuatro a la vez, en una rejilla de dos filas a los lados
+  de la mano (columnas: margen 7% · fases · hueco 31% · fases · margen 9%). Las
+  columnas del DOM llevan `display: contents` y cada fase va a su celda, así las
+  filas se comparten entre los dos lados y los filetes quedan alineados aunque
+  los textos midan distinto. La activa a tinta plena, las demás al 30%.
+- **Móvil:** una cada vez, las cuatro en la misma celda de rejilla bajo la mano;
+  la celda toma el alto de la más larga y el bloque no salta al cambiar.
+
+La activa va por cuartos del recorrido, y la primera está encendida desde que la
+sección se ancla. Con movimiento reducido el titular se queda quieto pero las
+fases siguen encendiéndose con el scroll: en móvil, si no, sólo se leería una.
+
+Aire medido entre las fases y la mano: 47–78 px de 1280 a 1920 de ancho, 26 px a
+1024. La sonda barre cada fase visible contra el lienzo de la mano y comprueba
+que acaben por encima de las píldoras.
 
 **La mano es un agujero blanco.** Emite las letras desde su centro y las
 centrifuga alrededor. Antes el campo empujaba cada letra hasta el contorno
@@ -200,12 +218,6 @@ navegador a recalcularla para las mil y pico letras en cada cuadro.
 Un cuadro sólo calcula las letras dentro del alcance, y cada una evalúa la
 transformación cinco veces: cuatro para la lente y una para la posición.
 
-### text-indent se hereda y lo aplica cada inline-block
-
-Las fases sangran la primera línea. Como cada letra es un `inline-block` —y por
-tanto un contenedor de bloque—, cada una aplicaba la sangría a su propia línea
-y acababa midiendo 6.5em de ancho. Hay que anularlo en `.pal` y `.let`.
-
 ### El header cambia de composición, no sólo de medidas
 
 En escritorio el logo va pequeño en la barra de arriba, con el menú a la
@@ -230,6 +242,14 @@ logo y la fila de enlaces en escritorio. No se calcula: en móvil el interruptor
 toma el mismo `top` y la misma altura que el punto —`--bolita`—, así que los
 centros coinciden solos; en escritorio los tres se cuelgan del 2.5% del alto
 con `translateY(-50%)`.
+
+### El orden de las reglas del interruptor importa
+
+La regla de móvil de `.idioma` va **después** de su regla base, en su propio
+`@media`. Dentro del bloque de móvil, que está más arriba en el archivo, perdía
+contra ella por orden con la misma especificidad, y nunca se aplicaba. Parecía
+alineado con el punto del menú sólo porque a 390×844 el 2.5% del alto cae casi
+donde su centro; a 375×667 quedaba 1.6 px desfasado.
 
 ### El header espera a su fondo
 
