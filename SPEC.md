@@ -39,7 +39,7 @@ El progreso es `q = -rect.top / (offsetHeight - innerHeight)`, de 0 a 1.
 
 | Sección | Pista | Umbrales |
 |---|---|---|
-| mano | 620svh (480svh en móvil) | continuo: las cintas y el % siguen el avance |
+| mano | 620svh (480svh en móvil) | titular emitido de 0 a 0.18; fases por cuartos; el % sigue el avance |
 | gato | 680svh (560svh en móvil) | frases 0.08 / 0.21 / 0.33 / 0.45 / 0.57 / 0.70 |
 | problemas | automática, no por scroll | 6200 ms por frase, 900 ms de morfeo |
 
@@ -94,12 +94,39 @@ pantalla sin duplicar la instancia.
 
 Esta es la sección importante. Todo lo de aquí ya rompió algo al menos una vez.
 
-### La mano: el titular cruza, las fases esperan a los lados
+### La mano emite el titular
 
-El titular cruza de derecha a izquierda atado al avance de la sección, y es lo
-único que la mano aparta: el campo (abajo) sólo actúa sobre sus letras. Se probó
-con los párrafos y se descartó: en texto de lectura el efecto estorba más de lo
-que luce.
+Al anclarse la sección, las letras del titular salen del centro de la mano y
+viajan cada una a su sitio en la frase, atadas al scroll. Entre 0 y 0.18 del
+recorrido la frase se monta; después queda quieta, en dos líneas en escritorio
+y cuatro en móvil, a 24–64 px de cuerpo. Hacia atrás las letras vuelven a la
+mano.
+
+Sustituye a dos versiones anteriores que no se leían: una línea de 258 px de
+cuerpo que cruzaba la pantalla, y encima un campo de «agujero blanco» que
+apartaba sus letras al pasar sobre la mano. El efecto lucía, pero con ese
+cuerpo y en movimiento la frase no se llegaba a leer.
+
+- **El origen se lee del lienzo.** El centro y el ancho de la mano salen de su
+  propia tinta (píxeles de luminancia < 150 sobre el papel 243), no de la
+  maqueta: la mano cae donde la deje el encuadre. Hasta que pinta, se sale del
+  centro del marco.
+- **Cada letra sale de un punto distinto** de la mano, con un desvío fijo por
+  letra (`DISPERSA`, 18% del ancho de la mano), para que no brote todo de un
+  solo píxel.
+- **En orden de lectura.** La salida se escalona (`ESCALONA` 0.55): la última
+  letra arranca cuando la primera va por la mitad, y se ve un chorro que va
+  escribiendo la frase.
+- **Viaje en arco**, curvado hacia la izquierda de su trayecto (`CURVA` 0.22),
+  con la letra creciendo de 0.35 a 1 y girando hasta enderezarse. Se enciende
+  al dejar la mano, no dentro de ella.
+- **La curva acelera y frena** (`t²(3 − 2t)`). Con una que sólo frenaba, las
+  letras pasaban casi todo el viaje junto a su destino y se amontonaban allí
+  sin estela visible.
+
+Con movimiento reducido la frase está montada desde el principio.
+
+### La mano: las fases esperan a los lados
 
 Las fases son texto normal, sin partir en letras. Su contenido sale del marco
 teórico de Augurio —las cuatro tradiciones de la conversación fértil— sin
@@ -116,107 +143,18 @@ ficha antes de entregarla.
   la celda toma el alto de la más larga y el bloque no salta al cambiar.
 
 La activa va por cuartos del recorrido, y la primera está encendida desde que la
-sección se ancla. Con movimiento reducido el titular se queda quieto pero las
-fases siguen encendiéndose con el scroll: en móvil, si no, sólo se leería una.
+sección se ancla. Con movimiento reducido siguen encendiéndose con el scroll: en
+móvil, si no, sólo se leería una.
 
 Aire medido entre las fases y la mano: 47–78 px de 1280 a 1920 de ancho, 26 px a
 1024. La sonda barre cada fase visible contra el lienzo de la mano y comprueba
 que acaben por encima de las píldoras.
 
-**La mano es un agujero blanco.** Emite las letras desde su centro y las
-centrifuga alrededor. Antes el campo empujaba cada letra hasta el contorno
-siguiendo una distancia con signo, y tenía dos defectos que ningún ajuste
-arreglaba: las letras de dentro acababan apiladas en una franja pegada al
-borde, y al cruzar la mitad de la mano cada una cambiaba de golpe de salir por
-arriba a salir por abajo (saltos de hasta 290 px en un cuadro).
-
-El hueco se describe desde el centro de la mano con su **perfil radial**: cuánto
-mide en cada una de 96 direcciones, con los huecos entre dedos cerrados (máximo
-en ±2 direcciones, suavizado en ±2) para que la letra rodee la mano y no se meta
-entre ellos. Con ventanas más anchas el hueco salía mayor que la mano bajo la
-palma y el párrafo se comprimía sin tocarla. El suavizado del perfil nunca
-baja de lo que mide la mano en esa dirección ni en las vecinas, así que al
-interpolar el hueco sigue conteniéndola entera. Se lee del propio lienzo, no de
-las maquetas: la mano cae donde la deje el encuadre.
-
-Cada letra se desplaza con **r' = √(r² + A²·h(r))**, con `A` el hueco en su
-dirección más el cuerpo de la letra. Sin la atenuación `h`, esa transformación
-conserva el área: lo que ocupaba la mano se reparte en un anillo alrededor en
-vez de apilarse. `h = (1 − x²)³` con `x = r/R` llega a cero en `R` sin
-pendiente, así que el campo acaba del todo, sin corte.
-
-**Garantía, no tanteo.** Como `1 − (1 − t)³ ≤ 3t`, con `R ≥ √3·A` se cumple
-`r'² − A² ≥ 0`: ninguna letra puede acabar dentro del hueco. La misma condición
-hace que `r'` crezca con `r`, así que dos letras nunca se cruzan en la dirección
-radial. `ALCANCE = 1.8`.
-
-**Remolino.** Un giro alrededor del centro que decrece con la distancia —también
-conserva el área—, en sentido antihorario: por encima de la mano lleva a la
-izquierda, como el titular, y por debajo a la derecha, como las fases. Las
-letras aceleran al rodear la mano y se abren huecos por delante; eso es lo que
-se lee como centrifugado. La emisión se calcula ya en la dirección final, para
-que la garantía valga donde la letra acaba.
-
-**Lente.** Emitir desde un centro conservando el área obliga a comprimir en la
-dirección radial, y cada letra se encoge en la misma medida que el espacio a su
-alrededor. Hacen falta dos medidas, sacadas del jacobiano de la transformación:
-
-- **A lo largo de la línea**, cuánto se estira un segmento horizontal (`kx`).
-- **Entre líneas**, la distancia perpendicular entre la línea y la siguiente ya
-  deformadas: el determinante dividido por `kx`. No vale medir cuánto se alarga
-  un segmento vertical: el remolino lo tuerce sin acortarlo, y bajo la palma,
-  donde la línea se estira al doble, el espacio con la de abajo se quedaba en la
-  mitad sin que esa medida lo notara.
-
-Las dos se miden a la escala de las vecinas (media letra en horizontal, media
-línea en vertical), y el corte del campo se alarga hasta donde llegan esas
-muestras para que el tamaño no salte al entrar.
-
-Mínimo 0.3 en las fases: en escritorio el párrafo cruza la muñeca y ahí el
-espacio baja de la mitad. Se probó desvanecer las letras por debajo de 0.5 en
-vez de encogerlas: pisan igual de poco y se perdían 60–75 por pantalla. En el
-titular el mínimo es 0.6: sus letras miden 150 px y van muy separadas, no
-chocan, y bajarlas más daba un tirón de hasta un 13% de tamaño por paso de
-scroll al pasar por las puntas de los dedos.
-
-**Un solo cuerpo por cinta.** El hueco se agranda con el cuerpo de la letra más
-grande de su cinta, no con el de cada una. Con uno por letra, cada una se movía
-con un campo distinto —una «m» y una «i» vecinas, o la clave en negrita y la
-línea de debajo—, y la garantía de que dos letras no se cruzan sólo vale dentro
-de una misma transformación: la palabra clave de un párrafo acababa montada en
-la línea siguiente.
-
-Las letras que pasan justo por el centro dan media vuelta al hueco en muy poco
-recorrido; salen de él encendiéndose en vez de cruzar la pantalla de golpe.
-
-Medido contra el campo anterior, en cinco puntos del recorrido a 1440:
-
-| | antes | ahora |
-|---|---|---|
-| letras fuera de orden de lectura | 70 | 0 |
-| letras que pisan a otra (cajas orientadas) | 270 (41%) | móvil 0; escritorio ≤ 3% en la muñeca |
-| saltos de más de 6 px, scroll de 3 en 3 | 12.8% de los movimientos | ninguno en 235.000 |
-
-Probados tres alcances: con la campana `exp(−(r/σ)²)` cortada a 2.2σ el campo
-cubría la pantalla del móvil; con `R = 2.2·A` hay más letras tocadas y más
-choques que con 1.8 y las mismas letras pequeñas. Esas letras pequeñas son la
-compresión propia de emitir conservando el área, no del alcance.
-
-**Cómo medir choques de letras giradas.** `getBoundingClientRect` devuelve la
-caja alineada con los ejes que envuelve a la letra girada, hasta un 40% más
-ancha: dos letras que sólo se tocan sobre una curva salían pisadas. Se usa el
-centro real, `offsetWidth`/`offsetHeight` por la escala y la comparación en el
-marco girado. Con la caja alineada, 51 «choques» en la muñeca; con la orientada,
-5.
-
 ### En la mano no se puede leer maquetación al pintar
 
-`pintar` no lee `offsetTop` ni `offsetLeft`: todo eso se cachea en
-`medirLetras`. Leer maquetación después de escribir transformaciones obliga al
-navegador a recalcularla para las mil y pico letras en cada cuadro.
-
-Un cuadro sólo calcula las letras dentro del alcance, y cada una evalúa la
-transformación cinco veces: cuatro para la lente y una para la posición.
+`pintar` no lee el sitio de las letras: se cachea en `medirLetras`, en reposo y
+una vez por maquetación. Leerlo después de escribir transformaciones obliga al
+navegador a recalcular la maquetación en cada cuadro.
 
 ### El header cambia de composición, no sólo de medidas
 
@@ -447,12 +385,6 @@ contra el tamaño pedido.
 Pulsa **Comprobar** y verifica la geometría de las cuatro secciones y que la
 coreografía del gato avance con el scroll. Correrla **a los dos anchos** después
 de cada cambio: casi todas las regresiones fueron de un ancho rompiendo el otro.
-
-### En la mano, solapar en vertical no es chocar
-
-En escritorio el titular y la tarjeta van en columnas distintas y se solapan en
-vertical sin tocarse. Cualquier comprobación de colisión tiene que cruzar los
-dos ejes; mirando sólo el vertical da un falso positivo de 90 px.
 
 ### La sonda mide contra clientWidth, no contra innerWidth
 

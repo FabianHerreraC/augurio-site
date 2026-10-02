@@ -552,12 +552,13 @@ const GRANO = {
 })();
 
 /* ---- sección "qué hace" ----
-   La mano se queda quieta y el titular la cruza de derecha a izquierda, atado
-   al recorrido de la sección. La mano lo dispersa al pasar: es un agujero
-   blanco que aparta y centrifuga sus letras (ver más abajo).
+   La mano emite el titular. Al anclarse la sección, las letras salen del
+   centro de la mano y viajan cada una a su sitio en la frase, atadas al
+   scroll; hacia el 18% del recorrido la frase está completa y se queda quieta,
+   a un tamaño que se lee. Hacia atrás vuelven a la mano.
 
-   Las fases no llevan campo. En escritorio están las cuatro a la vez en dos
-   columnas a los lados de la mano, y en móvil se ve una cada vez bajo ella;
+   Las fases no se mueven: en escritorio están las cuatro a la vez en dos
+   columnas a los lados de la mano, en móvil se ve una cada vez bajo ella, y
    el recorrido enciende la activa por cuartos. */
 (function () {
   const sec = document.getElementById('quehace');
@@ -571,137 +572,43 @@ const GRANO = {
 
   const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // El campo se saca de la propia mano, leyendo el lienzo. Ponerlo a mano no
-  // sirve: la mano cae donde la deje el encuadre —que cambia entre escritorio
-  // y móvil— y un campo fijo se desalinea sin que nada avise.
-  //
-  // La mano funciona como un agujero blanco: emite las letras desde su centro
-  // y las centrifuga alrededor. Antes el campo empujaba cada letra hasta el
-  // contorno siguiendo una distancia con signo, y eso tenía dos defectos que
-  // ningún ajuste arreglaba. Todas las letras de dentro acababan en la misma
-  // franja pegada al borde, apiladas hasta ser ilegibles. Y al cruzar la mitad
-  // de la mano cada letra cambiaba de golpe de salir por arriba a salir por
-  // abajo: saltos de hasta 290 px en un cuadro.
-  //
-  // Ahora el hueco se describe desde el centro de la mano con su perfil
-  // radial —cuánto mide la mano en cada una de 96 direcciones—, y cada letra
-  // se desplaza con r' = sqrt(r² + A²·h(r)). Sin la atenuación h esa es la
-  // transformación que conserva el área: lo que ocupaba la mano se reparte en
-  // un anillo alrededor en vez de apilarse, y eso es dispersar.
-  //
-  // La atenuación es h = (1 - x²)³ con x = r/R: vale 1 en el centro y llega a
-  // cero en R sin pendiente, así que el campo acaba del todo y sin corte. Una
-  // campana exp(-(r/σ)²) no se anula nunca y había que cortarla a casi tres
-  // veces el hueco; en móvil eso cubría la pantalla entera y todo el texto
-  // quedaba siempre un poco torcido.
-  //
-  // Garantía, no tanteo: como 1 - (1 - t)³ ≤ 3t, con R ≥ √3·A se cumple
-  // r'² - A² = r² - A²(1 - h) ≥ r² - 3A²·r²/R² ≥ 0. Ninguna letra puede acabar
-  // dentro del hueco. Y la misma condición hace que r' crezca con r: dos
-  // letras nunca se cruzan en la dirección radial.
-  const REJILLA = 120;     // columnas de la rejilla; las filas salen del alto
-  const DIRECCIONES = 96;  // resolución del perfil radial de la mano
-  const HOLGURA = 4;       // px entre el cuerpo de la letra y la mano
-  const ALCANCE = 1.8;     // R en múltiplos del hueco; tiene que ser ≥ √3
-  const REMOLINO = 0.28;   // giro alrededor del centro, en radianes, junto a él
-  const GIRO = 12;         // grados de giro máximo de la letra
-  const ENCOGE = 0.05;     // cuánto se encoge la letra junto a la mano, además
-  const MENOR = 0.3;       // la letra más pequeña que deja la compresión
-  const MENOR_TITULAR = 0.6; // en el titular: sus letras van muy separadas
+  const Q_EMITE = 0.18;    // tramo del recorrido en que se emite la frase
+  const ESCALONA = 0.55;   // cuánto se reparten las salidas: con 0 salen todas
+                           // a la vez; con 0.55 la última sale cuando la primera
+                           // ya va por la mitad, y se ve un chorro en orden de lectura
+  const CURVA = 0.22;      // cuánto se curva el viaje, en fracción de su largo
+  const DISPERSA = 0.18;   // de qué parte de la mano sale cada letra, en
+                           // fracción del ancho de la mano alrededor del centro
 
-  let campo = null;        // { hx, hy, perfil } centro y perfil, en px del marco
-
-  function medirCampo() {
+  /* ---- de dónde salen: el centro de la mano ----
+     Se lee del propio lienzo, no de la maqueta: la mano cae donde la deje el
+     encuadre, que cambia entre escritorio y móvil. */
+  let mano = null;         // { cx, cy, ancho } en px del marco
+  function medirMano() {
     const c = document.getElementById('mano');
     if (!c || !c.width || !c.height) return false;
     let im;
     try { im = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; }
     catch (e) { return false; }
-    const W = c.width, H = c.height;
-    const gw = REJILLA, gh = Math.max(8, Math.round(REJILLA * H / W));
-    let mascara = new Uint8Array(gw * gh);
-    let tinta = 0;
-    for (let gy = 0; gy < gh; gy++) {
-      const y = Math.min(H - 1, Math.round((gy + 0.5) * H / gh));
-      for (let gx = 0; gx < gw; gx++) {
-        const x = Math.min(W - 1, Math.round((gx + 0.5) * W / gw));
-        // se promedia un bloque: un punto suelto del grano no es mano
-        let suma = 0, n = 0;
-        for (let k = -2; k <= 2; k++) {
-          const yy = Math.min(H - 1, Math.max(0, y + k * 2));
-          for (let j = -2; j <= 2; j++) {
-            const xx = Math.min(W - 1, Math.max(0, x + j * 2));
-            suma += im[(yy * W + xx) * 4]; n++;
-          }
-        }
-        // 195 sobre un papel de 243: entra tambien el degradado de las yemas,
-        // donde la mano se deshilacha pero sigue siendo mano
-        if (suma / n < 195) { mascara[gy * gw + gx] = 1; tinta++; }
-      }
+    const W = c.width, H = c.height, paso = 4;
+    let sx = 0, sy = 0, n = 0, x0 = W, x1 = 0;
+    for (let y = 0; y < H; y += paso) for (let x = 0; x < W; x += paso) {
+      // 150 sobre un papel de 243: el cuerpo de la mano, no el grano suelto
+      if (im[(y * W + x) * 4] >= 150) continue;
+      sx += x; sy += y; n++;
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
     }
-    if (tinta < 20) return false;      // aún no ha pintado
-
-    // Se engorda la máscara una celda. Sin esto una letra puede caer en el
-    // borde de una celda tenida por papel y quedar encima de la mano: la
-    // rejilla mide 12 px por celda y una letra cabe de sobra ahí dentro.
-    const gorda = mascara.slice();
-    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
-      if (mascara[gy * gw + gx]) continue;
-      if ((gx > 0 && mascara[gy * gw + gx - 1]) ||
-          (gx < gw - 1 && mascara[gy * gw + gx + 1]) ||
-          (gy > 0 && mascara[(gy - 1) * gw + gx]) ||
-          (gy < gh - 1 && mascara[(gy + 1) * gw + gx])) gorda[gy * gw + gx] = 1;
-    }
-    mascara = gorda;
-
-    // Centro y perfil radial, en px del marco. El lienzo llena el marco, así
-    // que su caja en pantalla da la escala de cada celda.
+    if (n < 40) return false;          // aún no ha pintado
     const caja = c.getBoundingClientRect();
-    const pxX = caja.width / gw, pxY = caja.height / gh;
-    let sx = 0, sy = 0, n = 0;
-    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
-      if (!mascara[gy * gw + gx]) continue;
-      sx += (gx + 0.5) * pxX; sy += (gy + 0.5) * pxY; n++;
-    }
-    const hx = sx / n, hy = sy / n;
-
-    // Lo más lejos que llega la mano en cada dirección. Se miran las cuatro
-    // esquinas de cada celda para que el perfil la contenga entera.
-    const K = DIRECCIONES;
-    const crudo = new Float32Array(K);
-    for (let gy = 0; gy < gh; gy++) for (let gx = 0; gx < gw; gx++) {
-      if (!mascara[gy * gw + gx]) continue;
-      for (let e = 0; e < 4; e++) {
-        const dx = (gx + (e & 1)) * pxX - hx, dy = (gy + (e >> 1)) * pxY - hy;
-        const b = (((Math.atan2(dy, dx) / (2 * Math.PI)) % 1 + 1) % 1 * K) | 0;
-        const r = Math.hypot(dx, dy);
-        if (r > crudo[b]) crudo[b] = r;
-      }
-    }
-    // Se cierran los huecos entre dedos —la letra rodea la mano, no se mete
-    // entre ellos— y se suaviza. El suavizado nunca baja de lo que mide la
-    // mano en esa dirección ni en las vecinas: al interpolar entre dos
-    // direcciones, el hueco sigue conteniendo la mano entera.
-    const cerrado = new Float32Array(K);
-    for (let b = 0; b < K; b++) {
-      let m = 0;
-      for (let k = -2; k <= 2; k++) m = Math.max(m, crudo[(b + k + K) % K]);
-      cerrado[b] = m;
-    }
-    const perfil = new Float32Array(K);
-    for (let b = 0; b < K; b++) {
-      let suma = 0;
-      for (let k = -2; k <= 2; k++) suma += cerrado[(b + k + K) % K];
-      perfil[b] = Math.max(suma / 5, crudo[(b - 1 + K) % K], crudo[b], crudo[(b + 1) % K]);
-    }
-    campo = { hx, hy, perfil };
+    const kx = caja.width / W, ky = caja.height / H;
+    mano = { cx: sx / n * kx, cy: sy / n * ky, ancho: (x1 - x0) * kx };
     return true;
   }
 
   /* ---- partir en letras ----
-     Cada palabra va en su propio inline-block para que el salto de línea siga
-     cayendo entre palabras, y dentro cada letra en el suyo para poder
-     empujarla por separado. */
+     Cada palabra en su propio inline-block, para que el salto de línea siga
+     cayendo entre palabras, y dentro cada letra en el suyo para poder moverla
+     por separado. */
   function partir(nodo, texto) {
     nodo.textContent = '';
     const frag = document.createDocumentFragment();
@@ -721,29 +628,12 @@ const GRANO = {
     nodo.appendChild(frag);
   }
 
-  // letras con su posición en reposo, medida una vez por maquetación
-  let letras = [];          // { el, cinta, x, y }
-  let anchoTitular = 0, vw = 0, vh = 0;
-  let marcoCaja = { left: 0, top: 0, width: 0, height: 0 };
-  // Desplazamiento de la pista del titular. Se guarda aquí y no se lee al
-  // pintar: leer offsetTop después de escribir transformaciones obliga al
-  // navegador a recalcular la maquetación de todas las letras en cada cuadro.
-  let desT = 0;
-  // El cuerpo con que se agranda el hueco es uno por cinta: el del glifo más
-  // grande. Si cada letra usara el suyo, cada una se movería con un campo
-  // distinto —una «m» y una «i» vecinas, o la clave en negrita y la línea de
-  // debajo—, y la garantía de que dos letras no se cruzan sólo vale dentro de
-  // una misma transformación: la palabra clave acababa montada en la línea
-  // siguiente. Tomar el mayor asegura además la holgura de todas.
-  const cuerpoCinta = { titular: 0 };
-
   function escribir() {
     const t = T().mano;
     partir(titular, t.titular);
     const sr = document.getElementById('quehaceTitularSR');
     if (sr) sr.textContent = t.titular;
-    // Las fases van como texto normal: sin campo no hace falta partirlas, y
-    // así se leen y se seleccionan como cualquier párrafo.
+    // las fases van como texto normal: se leen y se seleccionan como cualquier párrafo
     fasesEl.forEach(function (el, i) {
       const par = t.fases[i];
       if (!par) return;
@@ -753,38 +643,22 @@ const GRANO = {
     hitos.forEach((h, i) => { if (t.pildoras[i]) h.textContent = t.pildoras[i]; });
   }
 
+  // Letras con su sitio en la frase, en px del marco. Se miden en reposo y una
+  // vez por maquetación: leerlas al pintar obligaría a recalcular todo en cada
+  // cuadro.
+  let letras = [];         // { el, x, y, jx, jy }
   function medirLetras() {
     const rm = marco.getBoundingClientRect();
-    marcoCaja = { left: rm.left, top: rm.top, width: rm.width, height: rm.height };
-    vw = rm.width; vh = rm.height;
-    anchoTitular = titular.scrollWidth;
-    desT = titular.offsetTop + titular.parentElement.offsetTop;
-
-    letras = [];
-    cuerpoCinta.titular = 0;
-    [[titular, 'titular']].forEach(function ([raiz, cinta]) {
-      // Se mide en reposo. Si las letras llevaran puesto el empuje del último
-      // cuadro —pasa al redimensionar—, su posición desplazada quedaría
-      // guardada como la de reposo.
-      const todas = raiz.querySelectorAll('.let');
-      todas.forEach((el) => { el.style.transform = ''; el.style.opacity = ''; });
-      const base = raiz.getBoundingClientRect();
-      todas.forEach(function (el) {
-        const r = el.getBoundingClientRect();
-        letras.push({ el, cinta,
-          // posición en reposo, relativa al origen sin trasladar de su cinta
-          x: r.left - base.left + r.width / 2,
-          y: r.top - base.top + r.height / 2,
-          // radio del cuerpo de la letra: una del titular mide 250 px de alto
-          // y necesita mucha más holgura que una de párrafo
-          r: Math.hypot(r.width, r.height) * 0.35,
-          // cuánto gira: completo en letras de texto, menos en las gigantes
-          kGiro: Math.min(1, 24 / Math.max(1, r.height)),
-          h: r.height,
-          puesta: false });
-      });
+    const todas = Array.from(titular.querySelectorAll('.let'));
+    todas.forEach((el) => { el.style.transform = ''; el.style.opacity = ''; });
+    letras = todas.map(function (el, i) {
+      const r = el.getBoundingClientRect();
+      // un desvío fijo por letra, para que no salgan todas del mismo punto
+      const h1 = Math.sin(i * 12.9898) * 43758.5453, h2 = Math.sin(i * 78.233) * 12543.123;
+      return { el, x: r.left - rm.left + r.width / 2, y: r.top - rm.top + r.height / 2,
+        jx: (h1 - Math.floor(h1)) * 2 - 1, jy: (h2 - Math.floor(h2)) * 2 - 1 };
     });
-    letras.forEach((L) => { if (L.r > cuerpoCinta[L.cinta]) cuerpoCinta[L.cinta] = L.r; });
+    enSitio = true;
   }
 
   /* ---- recorrido ---- */
@@ -795,12 +669,8 @@ const GRANO = {
     return Math.max(0, Math.min(1, -r.top / recorrido));
   }
 
-  // El titular entra por la derecha y sale por la izquierda.
-  const txTitular = (q) => vw - q * (vw + anchoTitular);
-
   // La fase activa va por cuartos del recorrido. La primera está encendida
-  // desde que la sección se ancla: así la presenta la maqueta, con
-  // «Conversación» activa nada más entrar.
+  // desde que la sección se ancla, como en la maqueta.
   const N_FASES = 4;
   const faseDe = (q) => Math.min(N_FASES - 1, Math.floor(q * N_FASES));
   let faseActiva = -1;
@@ -812,128 +682,59 @@ const GRANO = {
     hitos.forEach((h, k) => h.classList.toggle('is-activo', k === i));
   }
 
+  // Arranca y frena con suavidad. Con una curva que sólo frena, las letras
+  // pasaban casi todo el viaje junto a su destino y se amontonaban allí, sin
+  // estela visible desde la mano.
+  const suave = (t) => t * t * (3 - 2 * t);
+  let enSitio = true;      // todas las letras sin transformación
+
   function pintar(q) {
-    const tT = txTitular(q);
-    titular.style.transform = 'translate3d(' + tT.toFixed(1) + 'px,0,0)';
     ponerFase(q);
+    if (progreso) progreso.textContent = Math.round(q * 100) + '%';
 
-    if (!campo) { if (progreso) progreso.textContent = Math.round(q * 100) + '%'; return; }
-    const { hx, hy, perfil } = campo;
-    const K = perfil.length, VUELTA = 2 * Math.PI;
-    // radio del hueco en una dirección, interpolado entre las dos vecinas
-    const perfilEn = (th) => {
-      const t = ((th / VUELTA) % 1 + 1) % 1 * K, b = t | 0, a = t - b;
-      return perfil[b] * (1 - a) + perfil[(b + 1) % K] * a;
-    };
+    const e = reducido ? 1 : Math.min(1, q / Q_EMITE);
+    if (e >= 1) {
+      if (!enSitio) {
+        letras.forEach((L) => { L.el.style.transform = ''; L.el.style.opacity = ''; });
+        enSitio = true;
+      }
+      return;
+    }
+    enSitio = false;
 
-    // Dónde acaba un punto, con el hueco agrandado por el cuerpo de la letra.
-    // Deja el resultado en mX, mY, mGiro (el remolino, en radianes), mW (de 0
-    // lejos a 1 junto a la mano) y mA (el radio del hueco en esa dirección).
-    let mX = 0, mY = 0, mGiro = 0, mW = 0, mA = 0;
-    // 1 en el centro, 0 desde el alcance en adelante, sin pendiente en el borde
-    const atenua = (xr) => { if (xr >= 1) return 0; const t = 1 - xr * xr; return t * t * t; };
-    const mapa = (x, y, cuerpo) => {
-      const vx = x - hx, vy = y - hy;
-      const r = Math.hypot(vx, vy), th = Math.atan2(vy, vx);
-      const A0 = perfilEn(th) + cuerpo;
-      // Remolino: giro alrededor del centro, a contracorriente de las agujas
-      // del reloj, que es el sentido de las cintas —por encima va hacia la
-      // izquierda, como el titular; por debajo hacia la derecha, como las
-      // fases—. Las letras aceleran al rodear la mano y se abren huecos por
-      // delante: eso es lo que se lee como centrifugado. Un giro que decrece
-      // con la distancia también conserva el área.
-      const dth = -REMOLINO * atenua(r / (A0 * ALCANCE));
-      const th1 = th + dth;
-      // La emisión se calcula ya en la dirección final, así la garantía vale
-      // para donde la letra acaba y no para donde empezó.
-      const A1 = perfilEn(th1) + cuerpo;
-      const w = atenua(r / (A1 * ALCANCE));
-      const r1 = Math.sqrt(r * r + A1 * A1 * w);
-      mX = hx + r1 * Math.cos(th1); mY = hy + r1 * Math.sin(th1);
-      mGiro = dth; mW = w; mA = A1;
-      return r;
-    };
-    const D = 2;   // px, para medir cuánto se estira o se comprime el espacio
+    // si la mano aún no ha pintado, se sale del centro del marco
+    const rm = marco.getBoundingClientRect();
+    const cx = mano ? mano.cx : rm.width * 0.49, cy = mano ? mano.cy : rm.height * 0.53;
+    const radio = (mano ? mano.ancho : rm.width * 0.24) * DISPERSA;
+    const N = letras.length;
 
-    for (let i = 0; i < letras.length; i++) {
+    for (let i = 0; i < N; i++) {
       const L = letras[i];
-      const esT = L.cinta === 'titular';
-      const x = L.x + tT;
-      const y = L.y + desT;
-      const cuerpo = cuerpoCinta[L.cinta] + HOLGURA;
-
-      // Fuera del alcance el campo es exactamente cero: la letra en su sitio.
-      // El corte llega hasta donde alcanzan las muestras de la compresión, que
-      // se toman a la distancia de las vecinas: si no, la letra de justo fuera
-      // iría a tamaño 1 y la de justo dentro ya encogida, un salto de tamaño.
-      const r = Math.hypot(x - hx, y - hy);
-      const muestras = Math.max(D, 0.3 * L.h, esT ? 0 : 0.6 * L.h);
-      if (r >= (perfilEn(Math.atan2(y - hy, x - hx)) + cuerpo) * ALCANCE * 1.05 + muestras) {
-        if (L.puesta) { L.el.style.transform = ''; L.el.style.opacity = ''; L.puesta = false; }
+      // cada letra arranca un poco después que la anterior, en orden de lectura
+      const d = N > 1 ? (i / (N - 1)) * ESCALONA : 0;
+      let t = (e - d) / (1 - ESCALONA);
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      if (t >= 1) {
+        L.el.style.transform = ''; L.el.style.opacity = '';
         continue;
       }
-
-      // Cuánto se comprime el espacio alrededor de la letra. Emitir desde un
-      // centro conservando el área obliga a comprimir en la dirección radial;
-      // la letra se encoge en la misma medida, como un texto visto por una
-      // lente, y así cabe sin tocar a sus vecinas.
-      //
-      // Hacen falta dos medidas. A lo largo de la línea, cuánto se estira un
-      // segmento horizontal (kx): si baja de 1, las letras de la palabra se
-      // juntan. Y entre líneas, la distancia perpendicular entre la línea y
-      // la siguiente ya deformadas: el área local (el determinante) dividida
-      // por kx. No vale medir cuánto se alarga un segmento vertical, porque el
-      // remolino lo tuerce sin acortarlo: bajo la palma, donde la línea se
-      // estira al doble, el espacio con la de abajo se queda en la mitad y un
-      // segmento vertical lo daba por intacto. La clave en negrita acababa
-      // montada en la línea siguiente.
-      //
-      // Y se mide a la escala de las vecinas, no en un punto: lo que decide si
-      // dos letras chocan es cuánto se acercan entre ellas, y la de al lado
-      // está a media letra y la de abajo a una línea. Junto al borde del hueco
-      // la compresión cambia tan deprisa que la medida puntual la subestimaba
-      // y en la muñeca las letras se amontonaban.
-      // El titular es una sola línea: no tiene vecina de abajo que medir.
-      const dx = Math.max(D, 0.3 * L.h), dy = esT ? D : Math.max(D, 0.6 * L.h);
-      mapa(x - dx, y, cuerpo); const ax = mX, ay = mY;
-      mapa(x + dx, y, cuerpo); const bx = mX, by = mY;
-      mapa(x, y - dy, cuerpo); const cx = mX, cy = mY;
-      mapa(x, y + dy, cuerpo); const ex = mX, ey = mY;
-      const jxx = (bx - ax) / (2 * dx), jxy = (by - ay) / (2 * dx);
-      const jyx = (ex - cx) / (2 * dy), jyy = (ey - cy) / (2 * dy);
-      const kx = Math.hypot(jxx, jxy);
-      const kEntre = Math.abs(jxx * jyy - jxy * jyx) / Math.max(kx, 1e-6);
-      // Donde el campo aprieta más —a la altura de la muñeca en escritorio—
-      // el espacio baja de la mitad, y una letra a medio tamaño ya no cabe. Se
-      // deja encoger hasta 0.3: probado contra desvanecerlas por debajo de la
-      // mitad, pisan igual de poco y no se pierde ninguna.
-      let k = Math.min(kx, kEntre, 1);
-      // El titular tiene su propio mínimo. Sus letras miden 150 px y van muy
-      // separadas: no les hace falta encogerse tanto para no pisarse, y
-      // bajarlas a 0.3 al pasar por las puntas de los dedos era un tirón.
-      const menor = esT ? MENOR_TITULAR : MENOR;
-      if (k < menor) k = menor;
-
-      mapa(x, y, cuerpo);
-      const desX = mX - x, desY = mY - y;
-      let gir = mGiro * 180 / Math.PI * L.kGiro;
-      if (gir < -GIRO) gir = -GIRO;
-      const esc = k * (1 - ENCOGE * mW);
-      // Las pocas letras que pasan por el mismo centro dan media vuelta al
-      // hueco en muy poco recorrido. Salen de él encendiéndose en vez de
-      // cruzar la pantalla de golpe.
-      let u = (r / mA - 0.08) / 0.37;
-      u = u < 0 ? 0 : u > 1 ? 1 : u;
-      const op = 0.15 + 0.85 * u * u * (3 - 2 * u);
-
-      L.el.style.transform =
-        'translate3d(' + desX.toFixed(1) + 'px,' + desY.toFixed(1) + 'px,0) rotate(' +
-        gir.toFixed(1) + 'deg) scale(' + esc.toFixed(3) + ')';
-      L.el.style.opacity = op < 0.995 ? op.toFixed(2) : '';
-      L.puesta = true;
+      const k = suave(t);
+      // origen dentro de la mano, destino su sitio en la frase
+      const ox = cx + L.jx * radio, oy = cy + L.jy * radio * 0.6;
+      const vx = L.x - ox, vy = L.y - oy;
+      // viaje curvo: una parábola que se abre hacia el lado izquierdo del
+      // trayecto, con lo que el chorro sale girando como al soltarse de la mano
+      const arco = Math.sin(Math.PI * k) * CURVA;
+      const px = ox + vx * k + vy * arco, py = oy + vy * k - vx * arco;
+      const dx = px - L.x, dy = py - L.y;
+      const esc = 0.35 + 0.65 * k;
+      const gir = (1 - k) * (L.jx * 40);
+      // se enciende al dejar la mano, no dentro de ella
+      let op = t / 0.25; op = op > 1 ? 1 : op;
+      L.el.style.transform = 'translate3d(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) +
+        'px,0) rotate(' + gir.toFixed(1) + 'deg) scale(' + esc.toFixed(3) + ')';
+      L.el.style.opacity = op.toFixed(2);
     }
-
-    if (progreso) progreso.textContent = Math.round(q * 100) + '%';
   }
 
   /* ---- ir a una fase al pulsar su píldora ---- */
@@ -952,8 +753,7 @@ const GRANO = {
   /* ---- bucle ---- */
   // El cerrojo caduca. Si el navegador descarta el cuadro donde se libera
   // —pestaña de fondo, o un tirón de scroll— quedaría cerrado para siempre y
-  // la sección dejaría de responder sin dar ningún error. Le pasó al gato y
-  // está anotado en el spec; aquí también hace falta.
+  // la sección dejaría de responder sin dar ningún error.
   let pedido = false, cuando = 0;
   function alScroll() {
     const ahora = performance.now();
@@ -964,13 +764,13 @@ const GRANO = {
 
   function rehacer() {
     medirLetras();
-    medirCampo();
+    medirMano();
     pintar(avance());
   }
 
   // La mano tarda en pintarse: se reintenta hasta que el lienzo tenga tinta.
   (function esperarMano(intentos) {
-    if (medirCampo()) { pintar(avance()); return; }
+    if (medirMano()) { pintar(avance()); return; }
     if (intentos > 0) setTimeout(() => esperarMano(intentos - 1), 250);
   })(40);
 
@@ -978,7 +778,6 @@ const GRANO = {
   // las medidas necesitan la tipografía ya cargada, o las letras salen
   // colocadas contra una fuente que no es la definitiva
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(rehacer);
-  else rehacer();
   rehacer();
 
   document.addEventListener('augurio:idioma', function () { escribir(); rehacer(); });
@@ -987,16 +786,6 @@ const GRANO = {
   window.addEventListener('resize', function () {
     clearTimeout(temp); temp = setTimeout(rehacer, 160);
   });
-
-  if (reducido) {
-    // Sin movimiento: el titular se queda quieto a media pasada, pero las
-    // fases siguen encendiéndose con el scroll. Si se congelara todo, en
-    // móvil —donde se ve una fase cada vez— sólo se leería la tercera.
-    pintar(0.5);
-    window.removeEventListener('scroll', alScroll);
-    window.addEventListener('scroll', () => ponerFase(avance()), { passive: true });
-    ponerFase(avance());
-  }
 })();
 
 /* ---- sección del gato ----

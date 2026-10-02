@@ -380,7 +380,9 @@ async function correr() {
   };
 
   const faseActiva = () => Array.from(d.querySelectorAll('.fase')).findIndex((e) => e.classList.contains('is-activo'));
-  const leerCintas = () => ({ t: tx('.quehace__titular'), f: faseActiva(),
+  const enVuelo = () => Array.from(d.querySelectorAll('#quehaceTitular .let')).filter((l) => l.style.transform).length;
+  const totalLetras = d.querySelectorAll('#quehaceTitular .let').length;
+  const leerCintas = () => ({ t: enVuelo(), f: faseActiva(),
     q: +(-mano.getBoundingClientRect().top / mRec).toFixed(2), y: w.scrollY });
   // Qué letras llevan transformación en un punto fijo, antes de recorrer el
   // campo. Al final se vuelve a ese punto: tienen que ser exactamente las
@@ -394,10 +396,11 @@ async function correr() {
   const a = leerCintas();
   await irMano(0.65);
   const b = leerCintas();
-  // el titular cruza hacia la izquierda y las fases se encienden por cuartos
-  comprobar('mano: el titular cruza y las fases se encienden por turno',
-    b.t < a.t - 50 && a.f === 0 && b.f === 2,
-    `titular ${Math.round(a.t)}→${Math.round(b.t)}  fase ${a.f + 1}→${b.f + 1}` +
+  // la frase está ya montada en 0.15 y sigue quieta en 0.65; las fases se
+  // encienden por cuartos
+  comprobar('mano: la frase queda montada y las fases se encienden por turno',
+    b.t === 0 && a.f === 0 && b.f === 2,
+    `letras en vuelo ${a.t}→${b.t} de ${totalLetras}  fase ${a.f + 1}→${b.f + 1}` +
     `  ·  scroll ${a.y}→${b.y}, q ${a.q}→${b.q}`);
 
   comprobar('mano: el porcentaje sigue al recorrido',
@@ -467,65 +470,30 @@ async function correr() {
     (tocan.length ? 'sobre la mano: ' + tocan.join(' ') + '  ' : 'despejadas de la mano  ') +
     `· acaban en ${Math.round(bajoMax)}, píldoras en ${Math.round(topHitos)}`);
 
-  // Ninguna letra puede pisar a otra, ni de su palabra ni de otra línea. Esto
-  // pilló un fallo que la vista no aclaraba: con un campo distinto por letra y
-  // una lente que no medía bien el espacio entre líneas, la palabra clave de
-  // un párrafo acababa montada en la línea de debajo (el 12% de las letras
-  // movidas pisaban a otra).
-  //
-  // Con cajas orientadas. getBoundingClientRect da la caja alineada con los
-  // ejes que envuelve a la letra girada, hasta un 40% más ancha que la letra:
-  // dos letras giradas que sólo se tocan, como en un texto sobre una curva,
-  // salían pisadas. Se usa el centro real, el tamaño sin girar por su escala y
-  // la comparación en el marco girado.
-  //
-  // Se admite hasta un 4%: en escritorio el párrafo cruza la muñeca y en el
-  // núcleo el espacio baja de 0.3, así que ni al tamaño mínimo cabe todo.
-  const pisadas = [];
-  let peor = 0;
-  for (const q of [0.2, 0.62, 0.88]) {
-    await irMano(q);
-    const info = Array.from(d.querySelectorAll('#quehace .let'))
-      .filter((l) => l.style.transform)
-      .map((l) => {
-        const t = l.style.transform, e = t.match(/scale\(([\d.]+)\)/), g = t.match(/rotate\(([-\d.]+)deg\)/);
-        const r = l.getBoundingClientRect(), esc = e ? +e[1] : 1;
-        return { cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2,
-          w: l.offsetWidth * esc, h: l.offsetHeight * esc, th: (g ? +g[1] : 0) * Math.PI / 180,
-          vis: r.right > 0 && r.left < VW && r.bottom > 0 && r.top < VH };
-      })
-      .filter((o) => o.vis);
-    let n = 0;
-    for (let i = 0; i < info.length; i++) for (let j = i + 1; j < info.length; j++) {
-      const A = info[i], B = info[j];
-      if (Math.abs(A.cx - B.cx) > A.w + B.w + 4 || Math.abs(A.cy - B.cy) > A.h + B.h + 4) continue;
-      const th = (A.th + B.th) / 2, c = Math.cos(-th), sn = Math.sin(-th);
-      const dx = B.cx - A.cx, dy = B.cy - A.cy;
-      const ox = Math.max(0, (A.w + B.w) / 2 - Math.abs(dx * c - dy * sn));
-      const oy = Math.max(0, (A.h + B.h) / 2 - Math.abs(dx * sn + dy * c));
-      if (ox * oy / (Math.min(A.w * A.h, B.w * B.h) || 1) > 0.3) n++;
-    }
-    const pct = info.length ? n / info.length * 100 : 0;
-    if (pct > peor) peor = pct;
-    pisadas.push(q + '→' + n + '/' + info.length);
-  }
-  comprobar('mano: ninguna letra pisa a otra',
-    peor <= 4, pisadas.join('  ') + '  (peor ' + peor.toFixed(1) + '%, se admite 4%)');
+  // Montada, la frase tiene que leerse: entera dentro de la pantalla, ninguna
+  // letra todavía movida o transparente, y a un cuerpo de lectura. El titular
+  // anterior medía 258 px de cuerpo y cruzaba la pantalla sin llegar a leerse.
+  await irMano(0.3);
+  const tit = d.getElementById('quehaceTitular');
+  const rt = tit.getBoundingClientRect();
+  const cuerpo = parseFloat(w.getComputedStyle(tit).fontSize);
+  const raras = Array.from(tit.querySelectorAll('.let'))
+    .filter((l) => l.style.transform || (l.style.opacity && +l.style.opacity < 1)).length;
+  comprobar('mano: el titular queda quieto, entero y legible',
+    raras === 0 && rt.left >= 0 && rt.right <= VW && rt.top >= 0 && cuerpo >= 24 && cuerpo <= 72,
+    `${raras} letras sin asentar · ${Math.round(rt.left)}…${Math.round(rt.right)} de ${VW} · cuerpo ${Math.round(cuerpo)} px`);
 
-  // Fuera del campo la letra tiene que volver a su sitio, no quedarse torcida.
-  // Antes se contaba contra un umbral —menos de 40 movidas al entrar—, pero
-  // en móvil el titular ya roza los dedos al entrar y esas letras están
-  // dentro del campo con todo derecho. Lo que importa es que no haya nada
-  // olvidado: tras recorrer el campo entero, en el mismo punto tienen que
-  // estar movidas exactamente las mismas letras.
+  // La emisión va atada al scroll en los dos sentidos: al volver al principio
+  // las letras regresan a la mano, y al bajar otra vez la frase se monta
+  // entera. Al entrar, casi todas tienen que estar todavía en vuelo.
   await irMano(0.02);
   const movidasDespues = movidasEn();
-  const cuantas = movidasAntes ? movidasAntes.split(',').length : 0;
-  comprobar('mano: fuera del campo las letras vuelven a su sitio',
-    movidasDespues === movidasAntes,
-    movidasDespues === movidasAntes
-      ? `las mismas ${cuantas} movidas antes y después de recorrer el campo`
-      : `${cuantas} movidas antes, ${movidasDespues ? movidasDespues.split(',').length : 0} después`);
+  await irMano(0.3);
+  const asentadas = enVuelo();
+  const nAntes = movidasAntes ? movidasAntes.split(',').length : 0;
+  comprobar('mano: la mano emite la frase en los dos sentidos',
+    movidasDespues === movidasAntes && nAntes >= totalLetras * 0.8 && asentadas === 0,
+    `al entrar ${nAntes} de ${totalLetras} en vuelo, al volver las mismas: ${movidasDespues === movidasAntes ? 'sí' : 'no'} · al bajar de nuevo ${asentadas} sin asentar`);
 
   // la píldora activa es la de la fase encendida
   const pildora = () => Array.from(d.querySelectorAll('.hito')).findIndex((h) => h.classList.contains('is-activo'));

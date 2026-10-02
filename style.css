@@ -216,8 +216,8 @@ html, body {
 /* ================= sección "qué hace" =================
    Medidas de mano3.png (2560 x 1560) y mano3mobile.png (984 x 1578).
 
-   La mano se queda quieta en el centro y el titular la cruza de derecha a
-   izquierda; su pista recorta por los lados. Las fases están quietas a los
+   La mano se queda quieta en el centro y emite el titular: sus letras salen
+   de ella y viajan a su sitio con el scroll. Las fases están quietas a los
    lados de la mano y el scroll enciende la activa. */
 
 .quehace {
@@ -264,33 +264,30 @@ html, body {
   letter-spacing: 0.04em;
 }
 
-/* ---- la pista del titular ---- */
-.quehace__pista {
+/* ---- el titular ----
+   Quieto y a tamaño de lectura, centrado sobre la mano. Antes era una sola
+   línea de 258 px de cuerpo que cruzaba la pantalla y no se llegaba a leer.
+   Sin overflow: las letras salen de la mano, que está debajo, y tienen que
+   verse durante el viaje. */
+.quehace__pista--titular {
   position: absolute;
-  left: 0;
-  right: 0;
-  overflow: hidden;
-  /* el contenido se sale por los lados a propósito */
+  left: 18%;
+  right: 18%;
+  top: 11%;
+  text-align: center;
   pointer-events: none;
 }
 
-.quehace__pista--titular { top: 6%; height: 26%; }
-
 .quehace__titular {
-  position: absolute;
-  left: 0;
-  top: 0;
   margin: 0;
-  white-space: nowrap;
-  font-size: 17.9vw;      /* 458 px sobre 2560, como en la maqueta */
+  font-size: clamp(28px, 3.4vw, 64px);
   font-weight: 400;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  will-change: transform;
+  letter-spacing: -0.01em;
+  line-height: 1.1;
 }
 
-/* Cada letra del titular va en su propio span para poder empujarla. Se
-   agrupan por palabra para que el salto de línea siga cayendo donde debe. */
+/* Cada letra en su propio span para poder moverla; agrupadas por palabra
+   para que el salto de línea siga cayendo entre palabras. */
 .quehace__titular .pal { display: inline-block; white-space: nowrap; }
 .quehace__titular .let { display: inline-block; will-change: transform; }
 
@@ -866,9 +863,9 @@ html, body {
     margin: 0;
   }
 
-  .quehace__pista--titular { top: 5%; height: 24%; }
+  .quehace__pista--titular { left: 8%; right: 8%; top: 7%; }
 
-  .quehace__titular { font-size: 42.8vw; }   /* 421 px sobre 984 */
+  .quehace__titular { font-size: clamp(24px, 7.6vw, 40px); }
 
   /* Las cuatro fases en la misma celda de una rejilla: la celda toma el alto
      de la más larga, así el bloque no salta al cambiar de una a otra. Las
@@ -1054,7 +1051,8 @@ html, body {
    cruzándose—, pero se aprieta para que la cinta de fases no se coma las
    píldoras. */
 @media (max-width: 900px) and (max-height: 700px) {
-  .quehace__pista--titular { top: 3%; height: 26%; }
+  .quehace__pista--titular { top: 5%; }
+  .quehace__titular { font-size: 24px; }
   .quehace__fases { top: 63%; }
   .fase__clave, .fase__texto { font-size: 12px; }
   .hitos { top: 92%; }
