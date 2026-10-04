@@ -130,48 +130,53 @@
 
         <p class="quehace__progreso" id="quehaceProgreso" aria-hidden="true">0%</p>
 
-        <!-- El titular: una sola línea que cruza el ancho. -->
-        <div class="quehace__pista quehace__pista--titular" aria-hidden="true">
-          <h2 class="quehace__titular" id="quehaceTitular"></h2>
+        <!-- El titular gira despacio alrededor de la mano, sobre una curva a
+             medio camino entre un círculo y la silueta de la mano. Cada letra
+             va colocada a mano sobre la curva: no es texto que fluya. -->
+        <div class="quehace__anillo" aria-hidden="true">
+          <p class="quehace__titular" id="quehaceTitular"></p>
         </div>
-        <p class="sr-only" id="quehaceTitularSR"></p>
+        <h2 class="sr-only" id="quehaceTitularSR"></h2>
 
-        <!-- Las fases. En escritorio las cuatro a la vez, en dos columnas que
-             flanquean la mano; en móvil una cada vez, en la franja de debajo.
-             El scroll enciende la activa. Sin campo: el empuje se queda en el
-             titular, que es donde se lee como efecto. -->
-        <div class="quehace__fases" id="quehaceFases">
-          <div class="quehace__col quehace__col--izq">
-            <article class="fase" data-n="0">
-              <p class="fase__num" aria-hidden="true">01</p>
-              <h3 class="fase__clave"></h3>
-              <p class="fase__texto"></p>
-            </article>
-            <article class="fase" data-n="1">
-              <p class="fase__num" aria-hidden="true">02</p>
-              <h3 class="fase__clave"></h3>
-              <p class="fase__texto"></p>
-            </article>
+        <!-- Las cuatro fases, como menú desplegable: el scroll abre una cada
+             vez, y cada una que se abre deshace la punta de un dedo. -->
+        <nav class="menu-fases" id="quehaceMenu" aria-label="Fases del proceso">
+          <div class="mf" data-n="0">
+            <button type="button" class="mf__cab" aria-expanded="false" aria-controls="mf0">
+              <span class="mf__num" aria-hidden="true">01</span>
+              <span class="mf__titulo">Conversación</span>
+            </button>
+            <div class="mf__cuerpo" id="mf0">
+              <div class="mf__dentro"><p class="mf__texto"></p></div>
+            </div>
           </div>
-          <div class="quehace__col quehace__col--der">
-            <article class="fase" data-n="2">
-              <p class="fase__num" aria-hidden="true">03</p>
-              <h3 class="fase__clave"></h3>
-              <p class="fase__texto"></p>
-            </article>
-            <article class="fase" data-n="3">
-              <p class="fase__num" aria-hidden="true">04</p>
-              <h3 class="fase__clave"></h3>
-              <p class="fase__texto"></p>
-            </article>
+          <div class="mf" data-n="1">
+            <button type="button" class="mf__cab" aria-expanded="false" aria-controls="mf1">
+              <span class="mf__num" aria-hidden="true">02</span>
+              <span class="mf__titulo">Captura</span>
+            </button>
+            <div class="mf__cuerpo" id="mf1">
+              <div class="mf__dentro"><p class="mf__texto"></p></div>
+            </div>
           </div>
-        </div>
-
-        <nav class="hitos" id="hitos" aria-label="Fases del proceso">
-          <button type="button" class="hito" data-n="0">Conversación</button>
-          <button type="button" class="hito" data-n="1">Captura</button>
-          <button type="button" class="hito" data-n="2">Análisis</button>
-          <button type="button" class="hito" data-n="3">Visualización</button>
+          <div class="mf" data-n="2">
+            <button type="button" class="mf__cab" aria-expanded="false" aria-controls="mf2">
+              <span class="mf__num" aria-hidden="true">03</span>
+              <span class="mf__titulo">Análisis</span>
+            </button>
+            <div class="mf__cuerpo" id="mf2">
+              <div class="mf__dentro"><p class="mf__texto"></p></div>
+            </div>
+          </div>
+          <div class="mf" data-n="3">
+            <button type="button" class="mf__cab" aria-expanded="false" aria-controls="mf3">
+              <span class="mf__num" aria-hidden="true">04</span>
+              <span class="mf__titulo">Visualización</span>
+            </button>
+            <div class="mf__cuerpo" id="mf3">
+              <div class="mf__dentro"><p class="mf__texto"></p></div>
+            </div>
+          </div>
         </nav>
       </div>
     </div>

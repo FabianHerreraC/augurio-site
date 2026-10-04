@@ -39,7 +39,7 @@ El progreso es `q = -rect.top / (offsetHeight - innerHeight)`, de 0 a 1.
 
 | Sección | Pista | Umbrales |
 |---|---|---|
-| mano | 620svh (480svh en móvil) | titular emitido de 0 a 0.18; fases por cuartos; el % sigue el avance |
+| mano | 620svh (480svh en móvil) | menú y dedos por cuartos (cada falange se deshace en 0.09); el titular gira por tiempo, no por scroll |
 | gato | 680svh (560svh en móvil) | frases 0.08 / 0.21 / 0.33 / 0.45 / 0.57 / 0.70 |
 | problemas | automática, no por scroll | 6200 ms por frase, 900 ms de morfeo |
 
@@ -74,6 +74,15 @@ tabla de senos de 1024 entradas en vez de `Math.sin` por punto y por cuadro.
 | `pxPerDot` | densidad: píxeles de lienzo por punto |
 | `scatter` | dispersión respecto del píxel, en px a 1440 de ancho |
 | `prepare` | `fn(ctx, w, h)` para limpiar la fuente antes de muestrear |
+| `zonas` | zonas que pueden dispersarse, en píxeles de la **imagen fuente**: `{x, y, dx, dy, rho, ancho}` |
+| `dispersa` | cuánto se alejan los puntos de una zona dispersa, en fracción del ancho |
+
+El objeto devuelto lleva `dispersar(k, a)` —de 0, en su sitio, a 1— y
+`dispersion()`, que lee el estado y usa la sonda. Cada punto guarda al sembrar
+a qué zona pertenece, con un peso que se desvanece hacia la base y los lados
+de la zona y una dirección de salida propia, en abanico de ±45°. Como las
+zonas van en coordenadas de la fuente, siguen al encuadre en cualquier
+pantalla.
 
 **`fit`, `zoom`, `panX`, `panY` y `pxPerDot` aceptan una función**, que se
 evalúa en cada `buildField()`. Así el encuadre puede depender del ancho de
@@ -84,7 +93,7 @@ pantalla sin duplicar la instancia.
 | Sección | Fuente | Encuadre |
 |---|---|---|
 | header | `headerA.png` | cover, `zoomCap` 1.35; `grano: GRANO`, `negro` [0.055, 0.09] |
-| mano | `mano-src.jpg` | sobre papel (`dark: true`), `scatter` 3.6, `pxPerDot` 6; en móvil `zoomCap` 3.4 + `zoom` 0.8, `panX` −0.02, `panY` 0.05 |
+| mano | `mano-src.jpg` | sobre papel (`dark: true`), `scatter` 3.6, `pxPerDot` 6; `zonas` en las cuatro falanges; escritorio `zoom` 0.58, `panX` −0.11; móvil `zoomCap` 3.4, `zoom` 0.42, `panX` −0.07, `panY` −0.19 |
 | gato | `gato-src.jpg` | contain; en móvil `zoom` 1.8 y `panX` 0.159; `grano: GRANO`, `negro` [0.06, 0.10] |
 | problemas | `problemas-src.jpg` | contain; en móvil cover + `zoom` 1.15, `panX` 0.138, `panY` −0.06; `grano: GRANO`, `negro` [0.008, 0.02] |
 
@@ -94,61 +103,56 @@ pantalla sin duplicar la instancia.
 
 Esta es la sección importante. Todo lo de aquí ya rompió algo al menos una vez.
 
-### La mano emite el titular
+### La mano: el titular gira a su alrededor
 
-Al anclarse la sección, las letras del titular salen del centro de la mano y
-viajan cada una a su sitio en la frase, atadas al scroll. Entre 0 y 0.18 del
-recorrido la frase se monta; después queda quieta, en dos líneas en escritorio
-y cuatro en móvil, a 24–64 px de cuerpo. Hacia atrás las letras vuelven a la
-mano.
+El titular gira en sentido horario, una vuelta cada 80 s de recorrido de la
+curva, sobre una línea a medio camino entre un círculo y la silueta de la mano
+(`PARECIDO` 0.6). Cada letra se coloca a mano: posición absoluta en el origen
+del marco y una transformación que la lleva a su punto y la gira con la
+tangente. El cuerpo se elige para que la frase, con su separador, dé justo una
+vuelta (18–44 px en escritorio, 15 de mínimo en móvil).
 
-Sustituye a dos versiones anteriores que no se leían: una línea de 258 px de
-cuerpo que cruzaba la pantalla, y encima un campo de «agujero blanco» que
-apartaba sus letras al pasar sobre la mano. El efecto lucía, pero con ese
-cuerpo y en movimiento la frase no se llegaba a leer.
+La curva se construye así, y el orden importa:
 
-- **El origen se lee del lienzo.** El centro y el ancho de la mano salen de su
-  propia tinta (píxeles de luminancia < 150 sobre el papel 243), no de la
-  maqueta: la mano cae donde la deje el encuadre. Hasta que pinta, se sale del
-  centro del marco.
-- **Cada letra sale de un punto distinto** de la mano, con un desvío fijo por
-  letra (`DISPERSA`, 18% del ancho de la mano), para que no brote todo de un
-  solo píxel.
-- **En orden de lectura.** La salida se escalona (`ESCALONA` 0.55): la última
-  letra arranca cuando la primera va por la mitad, y se ve un chorro que va
-  escribiendo la frase.
-- **Viaje en arco**, curvado hacia la izquierda de su trayecto (`CURVA` 0.22),
-  con la letra creciendo de 0.35 a 1 y girando hasta enderezarse. Se enciende
-  al dejar la mano, no dentro de ella.
-- **La curva acelera y frena** (`t²(3 − 2t)`). Con una que sólo frenaba, las
-  letras pasaban casi todo el viaje junto a su destino y se amontonaban allí
-  sin estela visible.
+1. **Perfil radial de la mano**, leído del lienzo: lo más lejos que llega en
+   cada una de 180 direcciones desde su centro, sólo con celdas macizas (ni el
+   grano suelto ni las puntas ya deshechas cuentan).
+2. **La silueta se suaviza antes de mezclar:** un máximo de ±24° que cierra los
+   dedos en una sola masa, y tres pasadas de media.
+3. Se mezcla con el radio medio y se suaviza otra vez.
+4. **Si la curva queda por dentro de la mano en algún punto, se sube entera**
+   lo que haga falta.
 
-Con movimiento reducido la frase está montada desde el principio.
+Las versiones anteriores forzaban la curva por fuera del perfil sólo donde
+hacía falta, con un máximo local al final, y eso devolvía escalones donde
+asomaban los dedos: dos letras vecinas llegaban a girar 54° una respecto de la
+otra y se montaban («orches·trate»). Con el desplazamiento global, cero
+concavidades y como mucho 10° entre letras vecinas.
 
-### La mano: las fases esperan a los lados
+Sólo gira con la sección a la vista y con movimiento reducido se queda quieto.
 
-Las fases son texto normal, sin partir en letras. Su contenido sale del marco
-teórico de Augurio —las cuatro tradiciones de la conversación fértil— sin
-nombrar autores: el agente que habla poco y pregunta con imágenes; leer cómo se
-dijo además de qué; las voces separadas sin promediar; la auditoría de cada
-ficha antes de entregarla.
+### La mano: el menú de fases y los dedos
 
-- **Escritorio:** las cuatro a la vez, en una rejilla de dos filas a los lados
-  de la mano (columnas: margen 7% · fases · hueco 31% · fases · margen 9%). Las
-  columnas del DOM llevan `display: contents` y cada fase va a su celda, así las
-  filas se comparten entre los dos lados y los filetes quedan alineados aunque
-  los textos midan distinto. La activa a tinta plena, las demás al 30%.
-- **Móvil:** una cada vez, las cuatro en la misma celda de rejilla bajo la mano;
-  la celda toma el alto de la más larga y el bloque no salta al cambiar.
+Las cuatro fases son un menú desplegable con uno abierto cada vez: el scroll
+abre la siguiente por cuartos del recorrido, y el primero está abierto desde
+que la sección se ancla. El cuerpo se despliega animando `grid-template-rows`
+de 0fr a 1fr. Al pulsar un título, el scroll va al centro de su cuarto.
 
-La activa va por cuartos del recorrido, y la primera está encendida desde que la
-sección se ancla. Con movimiento reducido siguen encendiéndose con el scroll: en
-móvil, si no, sólo se leería una.
+Cada fase que se abre deshace la última falange de un dedo —índice, medio,
+anular, meñique; el pulgar se queda—, en 0.09 de recorrido. Las ya deshechas
+siguen así: la mano va mostrando cuánto del proceso se ha recorrido. Al subir
+se recomponen.
 
-Aire medido entre las fases y la mano: 47–78 px de 1280 a 1920 de ancho, 26 px a
-1024. La sonda barre cada fase visible contra el lienzo de la mano y comprueba
-que acaben por encima de las píldoras.
+Las puntas (`DEDOS` en app.js) se midieron sobre mano-src.jpg con el perfil
+radial desde el centroide de la mano: los picos son las puntas y los valles
+entre ellos dan el largo de cada dedo; la falange es cerca de un tercio.
+
+En escritorio la mano va corrida a la izquierda (`panX` −0.11) y el menú a la
+derecha; en móvil la mano va más pequeña y arriba (`zoom` 0.42) y el menú
+debajo.
+
+Los textos de las fases salen del marco teórico de Augurio —las cuatro
+tradiciones de la conversación fértil— sin nombrar autores.
 
 ### En la mano no se puede leer maquetación al pintar
 

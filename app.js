@@ -149,6 +149,8 @@ function createDotField(canvas, opts) {
     srcTop: 0,          // fracción superior de la fuente que se descarta
     onListo: null,      // se llama una vez, tras el primer pintado
     grano: null,        // grano de fondo propio: ver GRANO
+    zonas: null,        // zonas que pueden dispersarse: ver dispersar()
+    dispersa: 0.06,     // cuánto se alejan sus puntos, en fracción del ancho
     negro: [0.05, 0.09],// con grano propio: luminancia hasta la que la imagen es fondo
     prepare: null       // fn(ctx, w, h) para limpiar la fuente antes de muestrear
   }, opts || {});
@@ -162,6 +164,11 @@ function createDotField(canvas, opts) {
 
   let W = 0, H = 0, clean = null, count = 0;
   let px, py, pv, ph1, ph2, sp1, sp2, amp, dsc;
+  // Zonas que se dispersan (las falanges de la mano). Cada punto guarda a qué
+  // zona pertenece, cuánto (de 0 en el borde a 1 en el centro de la zona) y
+  // su dirección de salida. Sólo se reservan si hay zonas.
+  let zi = null, zw = null, zx = null, zy = null;
+  const amt = new Float32Array(o.zonas ? o.zonas.length : 0);
   let buf32 = null, imageData = null, lastIdx = null, lastN = 0;
   let raf = 0, resizeTimer = 0, running = false, avisado = false;
 
@@ -205,8 +212,8 @@ function createDotField(canvas, opts) {
     // lienzo, así que no dependen de la resolución.
     s *= val(o.zoom);
     const dw = sw * s, dh = sh * s;
-    octx.drawImage(clean, 0, sy, sw, sh,
-      (W - dw) / 2 + val(o.panX) * W, (H - dh) / 2 + val(o.panY) * H, dw, dh);
+    const offX = (W - dw) / 2 + val(o.panX) * W, offY = (H - dh) / 2 + val(o.panY) * H;
+    octx.drawImage(clean, 0, sy, sw, sh, offX, offY, dw, dh);
 
     const data = octx.getImageData(0, 0, W, H).data;
     const n = W * H;
@@ -245,6 +252,38 @@ function createDotField(canvas, opts) {
     sp1 = new Float32Array(cap); sp2 = new Float32Array(cap);
     amp = new Float32Array(cap);
     dsc = new Float32Array(cap);   // cuánto deriva cada punto por cuadro
+    if (o.zonas) {
+      zi = new Uint8Array(cap); zw = new Float32Array(cap);
+      zx = new Float32Array(cap); zy = new Float32Array(cap);
+    }
+    // A qué zona pertenece un punto. Las zonas van en píxeles de la imagen
+    // fuente, así que el punto se lleva de vuelta a ella: siguen al encuadre
+    // en cualquier pantalla sin recalcular nada.
+    const enZona = (c) => {
+      const u = (px[c] - offX) / s, v = (py[c] - offY) / s + sy;
+      let mejor = 0, peso = 0;
+      for (let k = 0; k < o.zonas.length; k++) {
+        const Z = o.zonas[k];
+        const vx = u - Z.x, vy = v - Z.y;
+        const atras = -(vx * Z.dx + vy * Z.dy);          // hacia la base del dedo
+        const lado = Math.abs(vx * Z.dy - vy * Z.dx);
+        if (atras > Z.rho * 1.2 || atras < -Z.rho * 0.6 || lado > Z.ancho * 1.3) continue;
+        // se desvanece hacia la articulación y hacia los lados: la falange se
+        // deshace sin un corte recto con el resto del dedo
+        const fa = Math.min(1, Math.max(0, (Z.rho * 1.2 - atras) / (Z.rho * 0.5)));
+        const fl = Math.min(1, Math.max(0, (Z.ancho * 1.3 - lado) / (Z.ancho * 0.5)));
+        const w = fa * fa * (3 - 2 * fa) * fl * fl * (3 - 2 * fl);
+        if (w > peso) { peso = w; mejor = k + 1; }
+      }
+      if (!mejor) return;
+      const Z = o.zonas[mejor - 1];
+      // sale hacia fuera del dedo, abierto en abanico de ±45°, y más lejos
+      // cuanto más cerca de la punta estaba
+      const a = Math.atan2(Z.dy, Z.dx) + (Math.random() - 0.5) * 1.6;
+      const lejos = (0.35 + Math.random() * 0.65);
+      zi[c] = mejor; zw[c] = peso;
+      zx[c] = Math.cos(a) * lejos; zy[c] = Math.sin(a) * lejos;
+    };
 
     let c = 0;
     for (let i = 0, p = 0; i < n && c < cap; i++, p += 4) {
@@ -281,6 +320,7 @@ function createDotField(canvas, opts) {
         const vivo = sc ? suave : 1;
         amp[c] = (0.18 + Math.random() * 0.3) * o.fizz * vivo;
         dsc[c] = vivo;
+        if (zi) enZona(c);
       }
     }
     // El grano de fondo, sembrado aparte y uniforme. No depende de la imagen
@@ -308,12 +348,19 @@ function createDotField(canvas, opts) {
   const DARK = o.dark;
 
   function paint(t) {
+    const dispPx = o.dispersa * W;
     for (let i = 0; i < lastN; i++) buf32[lastIdx[i]] = BG;
     let ln = 0;
 
     for (let i = 0; i < count; i++) {
       const f = t === null ? 0 : SIN[(ph1[i] + (t * sp1[i] * LUT * 0.16 | 0)) & MASK];
       let v = pv[i] * (1 + amp[i] * f);
+      // los puntos de una zona dispersa se apartan y se aclaran al alejarse
+      let ox = 0, oy = 0;
+      if (zi !== null && zi[i]) {
+        const a = amt[zi[i] - 1] * zw[i];
+        if (a > 0) { ox = zx[i] * a * dispPx; oy = zy[i] * a * dispPx; v *= 1 - 0.55 * a; }
+      }
       if (v <= 2) continue;
       if (v > 255) v = 255;
 
@@ -321,13 +368,13 @@ function createDotField(canvas, opts) {
       // truncar manda la mitad de los puntos al píxel anterior y el núcleo
       // queda agujereado aunque haya un punto sembrado por píxel.
       let x, y;
-      if (t === null) { x = px[i] + 0.5 | 0; y = py[i] + 0.5 | 0; }
+      if (t === null) { x = px[i] + ox + 0.5 | 0; y = py[i] + oy + 0.5 | 0; }
       else {
         const d1 = SIN[(ph2[i] + (t * sp2[i] * LUT * 0.16 | 0)) & MASK];
         const d2 = SIN[(ph2[i] + 256 + (t * sp2[i] * LUT * 0.11 | 0)) & MASK];
         const dv = o.drift * dsc[i];
-        x = px[i] + d1 * dv + 0.5 | 0;
-        y = py[i] + d2 * dv + 0.5 | 0;
+        x = px[i] + d1 * dv + ox + 0.5 | 0;
+        y = py[i] + d2 * dv + oy + 0.5 | 0;
       }
       if (x < 0 || y < 0 || x >= W || y >= H) continue;
 
@@ -408,7 +455,20 @@ function createDotField(canvas, opts) {
     document.hidden ? stop() : start();
   });
 
-  return { start: start, stop: stop, resize: resize };
+  // Grado de dispersión de una zona, de 0 (en su sitio) a 1. Con movimiento
+  // reducido no hay bucle de cuadros, así que se repinta aquí.
+  function dispersar(k, a) {
+    if (k < 0 || k >= amt.length) return;
+    a = a < 0 ? 0 : a > 1 ? 1 : a;
+    if (amt[k] === a) return;
+    amt[k] = a;
+    if (reduced && buf32) paint(null);
+  }
+
+  // cuánto está dispersa cada zona; lo lee la sonda
+  const dispersion = () => Array.from(amt);
+
+  return { start: start, stop: stop, resize: resize, dispersar: dispersar, dispersion: dispersion };
 }
 
 /* El grano de fondo de todas las secciones oscuras. Antes salía de los
@@ -521,11 +581,24 @@ const GRANO = {
 })();
 
 /* ---- sección "qué hace": la mano, puntos oscuros sobre papel ----
-   La fuente (manosola.png) ya viene limpia: sin texto, sin guías y sin banda. */
+   La fuente (manosola.png) ya viene limpia: sin texto, sin guías y sin banda.
+
+   La última falange de cada dedo es una zona que puede dispersarse: el menú
+   de fases la deshace dedo a dedo. Las puntas se midieron sobre la propia
+   fuente (mano-src.jpg, 760 x 506), con el perfil radial desde el centroide de
+   la mano: los picos son las puntas y los valles entre ellos dan el largo de
+   cada dedo, del que la falange es cerca de un tercio. El pulgar se queda. */
+const DEDOS = [
+  { x: 251, y: 273, grados: 203, rho: 36 },   // índice
+  { x: 289, y: 214, grados: 227, rho: 34 },   // medio
+  { x: 337, y: 197, grados: 245, rho: 30 },   // anular
+  { x: 399, y: 223, grados: 268, rho: 22 }    // meñique
+];
+let campoMano = null;
 (function () {
   const c = document.getElementById('mano');
   if (!c) return;
-  createDotField(c, {
+  campoMano = createDotField(c, {
     src: 'mano-src.jpg',
     dark: true,
     // el papel de la referencia mide 241 de promedio y casi no tiene grano.
@@ -538,12 +611,18 @@ const GRANO = {
     gamma: 0.75,
     wGamma: 1.75,
     maxScale: 1,
-    // En mano3 la mano se apoya en el rectángulo del centro y ocupa poco más
-    // de un tercio del ancho; en móvil llena la pantalla.
+    // La mano deja sitio al titular, que gira a su alrededor. En escritorio va
+    // corrida a la izquierda, con el menú de fases a la derecha; en móvil va
+    // más pequeña y arriba, con el menú debajo.
     zoomCap: () => (window.innerWidth <= 900 ? 3.4 : 1.35),
-    zoom: () => (window.innerWidth <= 900 ? 0.74 : 0.58),
-    panX: () => (window.innerWidth <= 900 ? -0.02 : -0.026),
-    panY: () => (window.innerWidth <= 900 ? -0.16 : -0.062),
+    zoom: () => (window.innerWidth <= 900 ? 0.42 : 0.58),
+    panX: () => (window.innerWidth <= 900 ? -0.07 : -0.11),
+    panY: () => (window.innerWidth <= 900 ? -0.19 : -0.05),
+    zonas: DEDOS.map((d) => ({
+      x: d.x, y: d.y, rho: d.rho, ancho: 15,
+      dx: Math.cos(d.grados * Math.PI / 180), dy: Math.sin(d.grados * Math.PI / 180)
+    })),
+    dispersa: 0.055,
     pxPerDot: 6,
     maxDots: 320000,
     drift: 0.9,
@@ -552,116 +631,222 @@ const GRANO = {
 })();
 
 /* ---- sección "qué hace" ----
-   La mano emite el titular. Al anclarse la sección, las letras salen del
-   centro de la mano y viajan cada una a su sitio en la frase, atadas al
-   scroll; hacia el 18% del recorrido la frase está completa y se queda quieta,
-   a un tamaño que se lee. Hacia atrás vuelven a la mano.
+   El titular gira despacio, en sentido horario, alrededor de la mano, sobre
+   una curva a medio camino entre un círculo y la silueta de la mano.
 
-   Las fases no se mueven: en escritorio están las cuatro a la vez en dos
-   columnas a los lados de la mano, en móvil se ve una cada vez bajo ella, y
-   el recorrido enciende la activa por cuartos. */
+   Las cuatro fases son un menú desplegable: el scroll abre una cada vez, por
+   cuartos del recorrido, y cada una que se abre deshace en puntos la última
+   falange de un dedo —índice, medio, anular, meñique—. Las ya deshechas se
+   quedan así: la mano va mostrando cuánto del proceso se ha recorrido. Al
+   subir se recomponen. */
 (function () {
   const sec = document.getElementById('quehace');
   const marco = sec && sec.querySelector('.quehace__marco');
   const titular = document.getElementById('quehaceTitular');
-  const fases = document.getElementById('quehaceFases');
-  const fasesEl = fases ? Array.from(fases.querySelectorAll('.fase')) : [];
+  const menu = document.getElementById('quehaceMenu');
   const progreso = document.getElementById('quehaceProgreso');
-  const hitos = Array.from(document.querySelectorAll('.hito'));
-  if (!sec || !marco || !titular || !fases) return;
+  if (!sec || !marco || !titular || !menu) return;
+  const items = Array.from(menu.querySelectorAll('.mf'));
 
   const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const Q_EMITE = 0.18;    // tramo del recorrido en que se emite la frase
-  const ESCALONA = 0.55;   // cuánto se reparten las salidas: con 0 salen todas
-                           // a la vez; con 0.55 la última sale cuando la primera
-                           // ya va por la mitad, y se ve un chorro en orden de lectura
-  const CURVA = 0.22;      // cuánto se curva el viaje, en fracción de su largo
-  const DISPERSA = 0.18;   // de qué parte de la mano sale cada letra, en
-                           // fracción del ancho de la mano alrededor del centro
+  const PERIODO = 80;      // segundos por vuelta del titular
+  const PARECIDO = 0.6;    // 0 = círculo, 1 = silueta de la mano
+  const AIRE = 0.55;       // separación entre la mano y la línea del titular, en cuerpos de letra
+  const SEPARADOR = '   ·   ';
+  const N_FASES = 4;
+  const TRAMO_DEDO = 0.09; // cuánto recorrido tarda una falange en deshacerse
 
-  /* ---- de dónde salen: el centro de la mano ----
-     Se lee del propio lienzo, no de la maqueta: la mano cae donde la deje el
+  /* ---- la forma de la mano ----
+     Centro y perfil radial —lo más lejos que llega la mano en cada dirección—,
+     leídos del propio lienzo y no de la maqueta: la mano cae donde la deje el
      encuadre, que cambia entre escritorio y móvil. */
-  let mano = null;         // { cx, cy, ancho } en px del marco
+  const DIRS = 180;
+  let mano = null;         // { cx, cy, perfil } en px del marco
   function medirMano() {
     const c = document.getElementById('mano');
     if (!c || !c.width || !c.height) return false;
     let im;
     try { im = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; }
     catch (e) { return false; }
-    const W = c.width, H = c.height, paso = 4;
-    let sx = 0, sy = 0, n = 0, x0 = W, x1 = 0;
-    for (let y = 0; y < H; y += paso) for (let x = 0; x < W; x += paso) {
-      // 150 sobre un papel de 243: el cuerpo de la mano, no el grano suelto
-      if (im[(y * W + x) * 4] >= 150) continue;
-      sx += x; sy += y; n++;
-      if (x < x0) x0 = x; if (x > x1) x1 = x;
-    }
-    if (n < 40) return false;          // aún no ha pintado
+    const W = c.width, H = c.height, paso = 6;
     const caja = c.getBoundingClientRect();
     const kx = caja.width / W, ky = caja.height / H;
-    mano = { cx: sx / n * kx, cy: sy / n * ky, ancho: (x1 - x0) * kx };
+    // Una celda es mano si su entorno es macizo: así no cuenta el grano suelto
+    // ni los puntos de una falange ya deshecha, que van ralos.
+    const macizo = (x, y) => {
+      let suma = 0, n = 0;
+      for (let k = -2; k <= 2; k++) for (let j = -2; j <= 2; j++) {
+        const xx = Math.min(W - 1, Math.max(0, x + j * 2)), yy = Math.min(H - 1, Math.max(0, y + k * 2));
+        suma += im[(yy * W + xx) * 4]; n++;
+      }
+      return suma / n < 170;
+    };
+    const celdas = [];
+    let sx = 0, sy = 0;
+    for (let y = 0; y < H; y += paso) for (let x = 0; x < W; x += paso)
+      if (macizo(x, y)) { celdas.push(x * kx, y * ky); sx += x * kx; sy += y * ky; }
+    const n = celdas.length / 2;
+    if (n < 30) return false;            // aún no ha pintado
+    const cx = sx / n, cy = sy / n;
+    const bruto = new Float32Array(DIRS);
+    for (let i = 0; i < celdas.length; i += 2) {
+      const dx = celdas[i] - cx, dy = celdas[i + 1] - cy;
+      const b = (((Math.atan2(dy, dx) / (2 * Math.PI)) % 1 + 1) % 1 * DIRS) | 0;
+      const r = Math.hypot(dx, dy) + paso * kx;
+      if (r > bruto[b]) bruto[b] = r;
+    }
+    // se cierran los huecos entre dedos: el titular rodea la mano, no se mete
+    const perfil = new Float32Array(DIRS);
+    for (let b = 0; b < DIRS; b++) {
+      let m = 0;
+      for (let k = -8; k <= 8; k++) m = Math.max(m, bruto[(b + k + DIRS) % DIRS]);
+      perfil[b] = m;
+    }
+    mano = { cx, cy, perfil };
     return true;
   }
 
-  /* ---- partir en letras ----
-     Cada palabra en su propio inline-block, para que el salto de línea siga
-     cayendo entre palabras, y dentro cada letra en el suyo para poder moverla
-     por separado. */
-  function partir(nodo, texto) {
-    nodo.textContent = '';
-    const frag = document.createDocumentFragment();
-    texto.split(/(\s+)/).forEach(function (trozo) {
-      if (!trozo) return;
-      if (/^\s+$/.test(trozo)) { frag.appendChild(document.createTextNode(trozo)); return; }
-      const pal = document.createElement('span');
-      pal.className = 'pal';
-      for (const ch of trozo) {
-        const l = document.createElement('span');
-        l.className = 'let';
-        l.textContent = ch;
-        pal.appendChild(l);
+  /* ---- la curva ----
+     Un radio por dirección, mezcla del radio medio (un círculo) y del perfil
+     de la mano, suavizado para que el texto corra sin quiebros. Se guarda como
+     tabla por píxel de recorrido: posición y ángulo de la tangente. */
+  let curva = null;        // { x, y, a, P }
+  function trazarCurva(aire) {
+    if (!mano) return;
+    const p = mano.perfil;
+    let media = 0;
+    for (let b = 0; b < DIRS; b++) media += p[b];
+    media /= DIRS;
+    const suavizar = (r, ancho) => {
+      const t = new Float32Array(DIRS);
+      for (let b = 0; b < DIRS; b++) {
+        let suma = 0;
+        for (let k = -ancho; k <= ancho; k++) suma += r[(b + k + DIRS) % DIRS];
+        t[b] = suma / (2 * ancho + 1);
       }
-      frag.appendChild(pal);
-    });
-    nodo.appendChild(frag);
+      return t;
+    };
+    // La silueta se suaviza antes de mezclarla: se cierra con un máximo ancho
+    // —los dedos y sus huecos quedan como una sola masa— y se alisa. Mezclar el
+    // perfil crudo y luego forzar la curva por fuera de él dejaba escalones
+    // donde asoman los dedos: dos letras vecinas llegaban a girar 54° una
+    // respecto de la otra y se montaban.
+    let env = new Float32Array(DIRS);
+    for (let b = 0; b < DIRS; b++) {
+      let m = 0;
+      for (let k = -12; k <= 12; k++) m = Math.max(m, p[(b + k + DIRS) % DIRS]);
+      env[b] = m;
+    }
+    for (let pasada = 0; pasada < 3; pasada++) env = suavizar(env, 10);
+    let r = new Float32Array(DIRS);
+    for (let b = 0; b < DIRS; b++) r[b] = media + PARECIDO * (env[b] - media);
+    for (let pasada = 0; pasada < 2; pasada++) r = suavizar(r, 8);
+    // La curva nunca puede pasar por dentro de la mano. Si en algún punto lo
+    // hace, se sube entera lo que haga falta: un desplazamiento global no
+    // añade quiebros, uno local sí.
+    let falta = 0;
+    for (let b = 0; b < DIRS; b++) falta = Math.max(falta, p[b] - r[b]);
+    for (let b = 0; b < DIRS; b++) r[b] += falta + aire;
+    // Se recorre en ángulo creciente desde la izquierda. En pantalla la y va
+    // hacia abajo, así que eso es sentido horario: arriba el texto avanza a la
+    // derecha y se lee derecho.
+    const N = 1440, xs = [], ys = [];
+    for (let i = 0; i <= N; i++) {
+      const th = -Math.PI + (i / N) * 2 * Math.PI;
+      const f = ((th + Math.PI) / (2 * Math.PI)) * DIRS + DIRS / 2;   // atan2 → índice
+      const b0 = Math.floor(f) % DIRS, b1 = (b0 + 1) % DIRS, u = f - Math.floor(f);
+      const rr = r[b0] * (1 - u) + r[b1] * u;
+      xs.push(mano.cx + rr * Math.cos(th)); ys.push(mano.cy + rr * Math.sin(th));
+    }
+    // tabla por píxel de recorrido
+    const acum = [0];
+    for (let i = 1; i <= N; i++) acum.push(acum[i - 1] + Math.hypot(xs[i] - xs[i - 1], ys[i] - ys[i - 1]));
+    const P = acum[N], M = Math.max(1, Math.floor(P));
+    const X = new Float32Array(M), Y = new Float32Array(M), A = new Float32Array(M);
+    let j = 0;
+    for (let k = 0; k < M; k++) {
+      while (j < N - 1 && acum[j + 1] < k) j++;
+      const u = (k - acum[j]) / Math.max(1e-6, acum[j + 1] - acum[j]);
+      X[k] = xs[j] + (xs[j + 1] - xs[j]) * u;
+      Y[k] = ys[j] + (ys[j + 1] - ys[j]) * u;
+      A[k] = Math.atan2(ys[j + 1] - ys[j], xs[j + 1] - xs[j]);
+    }
+    curva = { X, Y, A, P: M };
   }
 
+  /* ---- el titular, letra a letra ---- */
+  let letras = [];         // { el, w, c } ancho y centro en el recorrido, en px
+  let cuerpo = 32;
+  function partir(texto) {
+    titular.textContent = '';
+    const frag = document.createDocumentFragment();
+    for (const ch of texto + SEPARADOR) {
+      const l = document.createElement('span');
+      l.className = 'let';
+      l.textContent = ch === ' ' ? ' ' : ch;
+      frag.appendChild(l);
+    }
+    titular.appendChild(frag);
+  }
+
+  // El cuerpo se elige para que la frase dé exactamente una vuelta: se mide a
+  // 40 px y se escala al largo de la curva. El aire con la mano depende del
+  // cuerpo, y el largo de la curva del aire, así que se ajusta dos veces.
+  function maquetarTitular() {
+    if (!mano) return;
+    const els = Array.from(titular.querySelectorAll('.let'));
+    titular.style.fontSize = '40px';
+    const w40 = els.map((el) => el.offsetWidth);
+    const total40 = w40.reduce((a, b) => a + b, 0);
+    const minimo = window.innerWidth <= 900 ? 15 : 18;
+    cuerpo = 32;
+    for (let i = 0; i < 2; i++) {
+      trazarCurva(cuerpo * AIRE);
+      cuerpo = Math.max(minimo, Math.min(44, 40 * curva.P / total40));
+    }
+    trazarCurva(cuerpo * AIRE);
+    titular.style.fontSize = cuerpo.toFixed(2) + 'px';
+    const k = cuerpo / 40;
+    // si el cuerpo topó con su máximo sobra curva: se reparte entre las letras
+    const sobra = Math.max(0, curva.P - total40 * k) / els.length;
+    let s = 0;
+    letras = els.map(function (el, i) {
+      const w = w40[i] * k + sobra;
+      const L = { el, w: w40[i] * k, c: s + w / 2 };
+      s += w;
+      return L;
+    });
+  }
+
+  let t0 = performance.now();
+  function colocar(ahora) {
+    if (!curva || !letras.length) return;
+    const P = curva.P;
+    const s0 = reducido ? 0 : ((ahora - t0) / 1000) * (P / PERIODO);
+    const base = cuerpo * 0.78;          // de lo alto de la caja a la línea base
+    for (let i = 0; i < letras.length; i++) {
+      const L = letras[i];
+      let s = (s0 + L.c) % P;
+      const k = s | 0;
+      const x = curva.X[k], y = curva.Y[k], a = curva.A[k];
+      L.el.style.transform = 'translate(' + x.toFixed(1) + 'px,' + y.toFixed(1) + 'px) rotate(' +
+        a.toFixed(4) + 'rad) translate(' + (-L.w / 2).toFixed(1) + 'px,' + (-base).toFixed(1) + 'px)';
+    }
+  }
+
+  /* ---- el menú ---- */
   function escribir() {
     const t = T().mano;
-    partir(titular, t.titular);
+    partir(t.titular);
     const sr = document.getElementById('quehaceTitularSR');
     if (sr) sr.textContent = t.titular;
-    // las fases van como texto normal: se leen y se seleccionan como cualquier párrafo
-    fasesEl.forEach(function (el, i) {
-      const par = t.fases[i];
-      if (!par) return;
-      el.querySelector('.fase__clave').textContent = par[0];
-      el.querySelector('.fase__texto').textContent = par[1];
+    items.forEach(function (el, i) {
+      if (t.pildoras[i]) el.querySelector('.mf__titulo').textContent = t.pildoras[i];
+      if (t.fases[i]) el.querySelector('.mf__texto').textContent = t.fases[i][1];
     });
-    hitos.forEach((h, i) => { if (t.pildoras[i]) h.textContent = t.pildoras[i]; });
   }
 
-  // Letras con su sitio en la frase, en px del marco. Se miden en reposo y una
-  // vez por maquetación: leerlas al pintar obligaría a recalcular todo en cada
-  // cuadro.
-  let letras = [];         // { el, x, y, jx, jy }
-  function medirLetras() {
-    const rm = marco.getBoundingClientRect();
-    const todas = Array.from(titular.querySelectorAll('.let'));
-    todas.forEach((el) => { el.style.transform = ''; el.style.opacity = ''; });
-    letras = todas.map(function (el, i) {
-      const r = el.getBoundingClientRect();
-      // un desvío fijo por letra, para que no salgan todas del mismo punto
-      const h1 = Math.sin(i * 12.9898) * 43758.5453, h2 = Math.sin(i * 78.233) * 12543.123;
-      return { el, x: r.left - rm.left + r.width / 2, y: r.top - rm.top + r.height / 2,
-        jx: (h1 - Math.floor(h1)) * 2 - 1, jy: (h2 - Math.floor(h2)) * 2 - 1 };
-    });
-    enSitio = true;
-  }
-
-  /* ---- recorrido ---- */
   function avance() {
     const r = sec.getBoundingClientRect();
     const alto = window.innerHeight || document.documentElement.clientHeight;
@@ -669,91 +854,40 @@ const GRANO = {
     return Math.max(0, Math.min(1, -r.top / recorrido));
   }
 
-  // La fase activa va por cuartos del recorrido. La primera está encendida
-  // desde que la sección se ancla, como en la maqueta.
-  const N_FASES = 4;
-  const faseDe = (q) => Math.min(N_FASES - 1, Math.floor(q * N_FASES));
-  let faseActiva = -1;
-  function ponerFase(q) {
-    const i = faseDe(q);
-    if (i === faseActiva) return;
-    faseActiva = i;
-    fasesEl.forEach((el, k) => el.classList.toggle('is-activo', k === i));
-    hitos.forEach((h, k) => h.classList.toggle('is-activo', k === i));
-  }
-
-  // Arranca y frena con suavidad. Con una curva que sólo frena, las letras
-  // pasaban casi todo el viaje junto a su destino y se amontonaban allí, sin
-  // estela visible desde la mano.
-  const suave = (t) => t * t * (3 - 2 * t);
-  let enSitio = true;      // todas las letras sin transformación
-
+  let abierto = -1;
   function pintar(q) {
-    ponerFase(q);
     if (progreso) progreso.textContent = Math.round(q * 100) + '%';
-
-    const e = reducido ? 1 : Math.min(1, q / Q_EMITE);
-    if (e >= 1) {
-      if (!enSitio) {
-        letras.forEach((L) => { L.el.style.transform = ''; L.el.style.opacity = ''; });
-        enSitio = true;
-      }
-      return;
+    // uno abierto cada vez, por cuartos; el primero desde que se ancla
+    const i = Math.min(N_FASES - 1, Math.floor(q * N_FASES));
+    if (i !== abierto) {
+      abierto = i;
+      items.forEach(function (el, k) {
+        el.classList.toggle('is-abierto', k === i);
+        el.querySelector('.mf__cab').setAttribute('aria-expanded', k === i ? 'true' : 'false');
+      });
     }
-    enSitio = false;
-
-    // si la mano aún no ha pintado, se sale del centro del marco
-    const rm = marco.getBoundingClientRect();
-    const cx = mano ? mano.cx : rm.width * 0.49, cy = mano ? mano.cy : rm.height * 0.53;
-    const radio = (mano ? mano.ancho : rm.width * 0.24) * DISPERSA;
-    const N = letras.length;
-
-    for (let i = 0; i < N; i++) {
-      const L = letras[i];
-      // cada letra arranca un poco después que la anterior, en orden de lectura
-      const d = N > 1 ? (i / (N - 1)) * ESCALONA : 0;
-      let t = (e - d) / (1 - ESCALONA);
-      t = t < 0 ? 0 : t > 1 ? 1 : t;
-      if (t >= 1) {
-        L.el.style.transform = ''; L.el.style.opacity = '';
-        continue;
-      }
-      const k = suave(t);
-      // origen dentro de la mano, destino su sitio en la frase
-      const ox = cx + L.jx * radio, oy = cy + L.jy * radio * 0.6;
-      const vx = L.x - ox, vy = L.y - oy;
-      // viaje curvo: una parábola que se abre hacia el lado izquierdo del
-      // trayecto, con lo que el chorro sale girando como al soltarse de la mano
-      const arco = Math.sin(Math.PI * k) * CURVA;
-      const px = ox + vx * k + vy * arco, py = oy + vy * k - vx * arco;
-      const dx = px - L.x, dy = py - L.y;
-      const esc = 0.35 + 0.65 * k;
-      const gir = (1 - k) * (L.jx * 40);
-      // se enciende al dejar la mano, no dentro de ella
-      let op = t / 0.25; op = op > 1 ? 1 : op;
-      L.el.style.transform = 'translate3d(' + dx.toFixed(1) + 'px,' + dy.toFixed(1) +
-        'px,0) rotate(' + gir.toFixed(1) + 'deg) scale(' + esc.toFixed(3) + ')';
-      L.el.style.opacity = op.toFixed(2);
+    // cada ítem que se abre deshace su dedo; los anteriores siguen deshechos
+    if (campoMano) for (let k = 0; k < N_FASES; k++) {
+      let a = (q - k / N_FASES) / TRAMO_DEDO;
+      a = a < 0 ? 0 : a > 1 ? 1 : a;
+      campoMano.dispersar(k, a * a * (3 - 2 * a));
     }
   }
 
-  /* ---- ir a una fase al pulsar su píldora ---- */
-  hitos.forEach(function (h, i) {
-    h.addEventListener('click', function () {
-      // al centro del cuarto de recorrido de esa fase
+  // al pulsar un ítem, el scroll va al centro de su cuarto de recorrido
+  items.forEach(function (el, i) {
+    el.querySelector('.mf__cab').addEventListener('click', function () {
       const q = (i + 0.5) / N_FASES;
       const alto = window.innerHeight || document.documentElement.clientHeight;
-      const recorrido = sec.offsetHeight - alto;
       const arriba = sec.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({ top: Math.round(arriba + q * recorrido),
+      window.scrollTo({ top: Math.round(arriba + q * (sec.offsetHeight - alto)),
         behavior: reducido ? 'auto' : 'smooth' });
     });
   });
 
-  /* ---- bucle ---- */
-  // El cerrojo caduca. Si el navegador descarta el cuadro donde se libera
-  // —pestaña de fondo, o un tirón de scroll— quedaría cerrado para siempre y
-  // la sección dejaría de responder sin dar ningún error.
+  /* ---- bucles ---- */
+  // El cerrojo del scroll caduca: si el navegador descarta el cuadro donde se
+  // libera, quedaría cerrado para siempre sin dar ningún error.
   let pedido = false, cuando = 0;
   function alScroll() {
     const ahora = performance.now();
@@ -762,30 +896,42 @@ const GRANO = {
     requestAnimationFrame(function () { pedido = false; pintar(avance()); });
   }
 
+  // el giro sólo corre con la sección a la vista
+  let raf = 0, visible = false;
+  function girar(ahora) { colocar(ahora); raf = requestAnimationFrame(girar); }
+  function arrancar() { if (!raf && !reducido) raf = requestAnimationFrame(girar); }
+  function parar() { if (raf) cancelAnimationFrame(raf); raf = 0; }
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(function (es) {
+      visible = es[0].isIntersecting;
+      visible ? arrancar() : parar();
+    }, { rootMargin: '100px' }).observe(sec);
+  } else { visible = true; arrancar(); }
+
   function rehacer() {
-    medirLetras();
-    medirMano();
+    if (!medirMano()) return false;
+    maquetarTitular();
+    colocar(performance.now());
     pintar(avance());
+    return true;
   }
 
-  // La mano tarda en pintarse: se reintenta hasta que el lienzo tenga tinta.
+  escribir();
+  // La mano tarda en pintarse; se reintenta hasta que el lienzo tenga tinta.
   (function esperarMano(intentos) {
-    if (medirMano()) { pintar(avance()); return; }
+    if (rehacer()) return;
     if (intentos > 0) setTimeout(() => esperarMano(intentos - 1), 250);
   })(40);
-
-  escribir();
-  // las medidas necesitan la tipografía ya cargada, o las letras salen
-  // colocadas contra una fuente que no es la definitiva
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(rehacer);
-  rehacer();
+  pintar(avance());
 
   document.addEventListener('augurio:idioma', function () { escribir(); rehacer(); });
   window.addEventListener('scroll', alScroll, { passive: true });
   let temp = 0;
   window.addEventListener('resize', function () {
-    clearTimeout(temp); temp = setTimeout(rehacer, 160);
+    clearTimeout(temp); temp = setTimeout(rehacer, 200);
   });
+  document.addEventListener('visibilitychange', () => (document.hidden ? parar() : visible && arrancar()));
 })();
 
 /* ---- sección del gato ----
