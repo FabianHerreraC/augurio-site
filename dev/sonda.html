@@ -254,14 +254,26 @@ async function correr() {
   comprobar('gato: la malla final se cierra', hitos[3].malla, '');
 
   // El marco lleva números y trazos; el lienzo se amplía por separado desde
-  // app.js. Si se desincronizan, los números dejan de caer sobre el gato.
-  const gm = rect(d, '.gato__marco');
+  // app.js. Los dos parten del encuadre contain de la escena —no de la
+  // pantalla— y se amplían 1.6 (escritorio) o 1.8 (móvil). Si se
+  // desincronizan, los números dejan de caer sobre el gato.
+  const gm = rect(d, '.gato__marco'), ge = rect(d, '.gato__escena');
+  const zoomGato = movil ? 1.8 : 1.6;
+  const marcoEsperado = Math.min(ge.w, ge.h * 2560 / 1696) * zoomGato;
   comprobar('gato: marco y lienzo con el mismo encuadre',
-    movil ? Math.abs(gm.w - VW * 1.8) < 6 : Math.abs(gm.w - Math.min(VW, VH * 2560 / 1696)) < 6,
-    `marco ${gm.w}px de ancho`);
+    Math.abs(gm.w - marcoEsperado) < 6,
+    `marco ${gm.w}px de ancho, esperado ${Math.round(marcoEsperado)} (escena ${ge.w}x${ge.h} × ${zoomGato})`);
 
-  // La tarjeta crece con la frase que le toque. La 5 es la más larga y era la
-  // única que llegaba al borde inferior, así que hay que recorrer las seis.
+  // La ficha blanca va a toda altura a la derecha (escritorio) o a todo el
+  // ancho debajo del gato (móvil), sin pisar la escena.
+  const gf = rect(d, '.gato__tarjeta');
+  comprobar('gato: la ficha ocupa su lado entero, sin pisar al gato',
+    movil ? (gf.y >= ge.y + ge.h - 1 && gf.x <= 1 && gf.x + gf.w >= VW - 1 && gf.y + gf.h >= VH - 1)
+          : (gf.x >= ge.x + ge.w - 1 && gf.y <= 1 && gf.y + gf.h >= VH - 1 && gf.x + gf.w >= VW - 1),
+    `escena ${ge.x}…${ge.x + ge.w} × ${ge.y}…${ge.y + ge.h} · ficha ${gf.x}…${gf.x + gf.w} × ${gf.y}…${gf.y + gf.h}`);
+
+  // El texto de cada frase tiene que caber en la ficha, con aire arriba y
+  // abajo. La 5 es la más larga, así que hay que recorrer las seis.
   const tarj = [];
   for (let k = 0; k < 6; k++) {
     const q = [0.10, 0.23, 0.35, 0.47, 0.60, 0.72][k];
@@ -270,23 +282,24 @@ async function correr() {
       const a = Array.from(d.querySelectorAll('.gato__frase')).findIndex((f) => f.classList.contains('is-in'));
       return a === k;
     }, 5000);
-    const r = d.getElementById('gatoTarjeta').getBoundingClientRect();
-    tarj.push({ n: tarj.length + 1, aire: Math.round(VH - r.bottom), alto: Math.round(r.height) });
+    await esperar(700);                     // la pila ajusta su alto con transición
+    const f = d.querySelectorAll('.gato__frase')[k].getBoundingClientRect();
+    const fi = d.getElementById('gatoTarjeta').getBoundingClientRect();
+    tarj.push({ n: tarj.length + 1, aire: Math.round(Math.min(f.top - fi.top, fi.bottom - f.bottom)), alto: Math.round(f.height) });
   }
   const apretada = tarj.filter((c) => c.aire < 24);
-  comprobar('gato: la tarjeta no toca el borde inferior en ninguna frase',
+  comprobar('gato: el texto de cada frase cabe en la ficha',
     apretada.length === 0,
     apretada.length ? apretada.map((c) => `frase ${c.n}: ${c.aire}px`).join('  ')
                     : 'aire mínimo ' + Math.min(...tarj.map((c) => c.aire)) + 'px');
 
   const nums = Array.from(d.querySelectorAll('.gato__num')).map((e) => e.getBoundingClientRect());
   const ancho = Math.max(...nums.map((r) => r.left)) - Math.min(...nums.map((r) => r.left));
-  // En móvil el marco desborda la pantalla y la constelación abarca ~63%; en
-  // escritorio cabe entero y abarca ~33%, que es lo que marca la maqueta. El
-  // caso que hay que atrapar es el marco encogido, con los números apiñados.
+  // La constelación tiene que llenar buena parte de la escena: el caso que hay
+  // que atrapar es el marco sin ampliar, con los números apiñados.
   comprobar('gato: los números quedan repartidos, no apiñados',
-    ancho > VW * (movil ? 0.5 : 0.25),
-    `abarcan ${Math.round(ancho)}px de ${VW} (${Math.round(ancho / VW * 100)}%)`);
+    ancho > ge.w * 0.5,
+    `abarcan ${Math.round(ancho)}px de ${ge.w} de escena (${Math.round(ancho / ge.w * 100)}%)`);
 
   // ---- problemas ---------------------------------------------------------
   const probs = seccion('probs');
@@ -429,8 +442,8 @@ async function correr() {
     d.getElementById('quehaceProgreso').textContent === '30%',
     d.getElementById('quehaceProgreso').textContent);
 
-  // El menú abre una fase cada vez, por cuartos del recorrido, y cada una
-  // deshace la punta de su dedo: acumulativo al bajar y reversible al subir.
+  // El menú abre una fase cada vez, por cuartos del recorrido, y sólo el dedo
+  // de la fase abierta está deshecho; vuelve a su sitio al subir.
   const abiertos = () => Array.from(d.querySelectorAll('.mf'))
     .map((e, i) => (e.classList.contains('is-abierto') ? i : -1)).filter((i) => i >= 0);
   const expandidos = () => Array.from(d.querySelectorAll('.mf__cab'))
@@ -438,7 +451,7 @@ async function correr() {
   const dedos = () => w.eval('campoMano.dispersion()').map((v) => Math.round(v * 100) / 100);
   const pasos = [];
   let menuBien = true, dedosBien = true;
-  const esperados = { 0.12: [1, 0, 0, 0], 0.37: [1, 1, 0, 0], 0.62: [1, 1, 1, 0], 0.88: [1, 1, 1, 1] };
+  const esperados = { 0.12: [1, 0, 0, 0], 0.37: [0, 1, 0, 0], 0.62: [0, 0, 1, 0], 0.88: [0, 0, 0, 1] };
   for (const q of [0.12, 0.37, 0.62, 0.88]) {
     await irMano(q);
     const ab = abiertos(), ex = expandidos(), dd = dedos();
@@ -452,7 +465,7 @@ async function correr() {
   if (vuelta.join() !== esperados[0.12].join()) dedosBien = false;
   comprobar('mano: el menú abre una fase cada vez',
     menuBien, pasos.map((p) => p.split(' dedos')[0]).join('  '));
-  comprobar('mano: cada fase deshace la punta de su dedo, y al subir se recompone',
+  comprobar('mano: sólo el dedo de la fase abierta está deshecho, y al subir se recompone',
     dedosBien, pasos.map((p) => p.split('→')[0] + '→' + p.split('dedos ')[1]).join('  ') + `  · de vuelta en 0.12: ${vuelta.join('/')}`);
 
   // el menú cabe y no pisa el anillo del titular

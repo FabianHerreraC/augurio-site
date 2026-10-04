@@ -366,10 +366,15 @@ html, body {
 
 /* ================= sección del gato =================
    .gato es sólo pista de scroll; .gato__fijo se ancla y no se mueve mientras
-   se la recorre. Dentro, .gato__marco reproduce el encuadre de la referencia
-   (2560x1696) ajustado por dentro, igual que el canvas: así los números caen
-   siempre sobre el mismo punto del gato. Los márgenes son negros como el
-   fondo, de modo que el ajuste no se nota. */
+   se la recorre. Dentro se parte en dos: la escena del gato a la izquierda y
+   la ficha blanca, a toda altura, a la derecha (en móvil, arriba y abajo).
+
+   En la escena, .gato__marco reproduce el encuadre de la referencia
+   (2560x1696) igual que el lienzo: así los números caen siempre sobre el
+   mismo punto del gato. Los dos se amplían y se corren a la vez —el marco con
+   --gz y --gt aquí, el lienzo con GATO_ZOOM y GATO_PAN en app.js—, porque la
+   fuente trae mucho margen alrededor del gato y sin ampliar quedaría pequeño
+   en media pantalla. */
 
 .gato {
   position: relative;
@@ -387,6 +392,18 @@ html, body {
   overflow: hidden;
   background: transparent;
   display: grid;
+  grid-template-columns: 58% 42%;
+  /* ampliación y corrimiento de la escena; ver GATO_ZOOM en app.js */
+  --gz: 1.6;
+  --gt: 9.5%;          /* centra en la escena la constelación de los números,
+                          que en la fuente cae al 40.5% del ancho */
+  --alto-escena: 100svh;
+}
+
+.gato__escena {
+  position: relative;
+  overflow: hidden;
+  display: grid;
   place-items: center;
 }
 
@@ -402,8 +419,10 @@ html, body {
   position: relative;
   z-index: 1;
   aspect-ratio: 2560 / 1696;
-  width: min(100%, calc(100svh * 2560 / 1696));
-  max-height: 100%;
+  /* el encuadre contain de la escena, ampliado: igual que el lienzo */
+  width: calc(min(100%, var(--alto-escena) * 2560 / 1696) * var(--gz));
+  flex: none;
+  transform: translateX(var(--gt));
 }
 
 .gato__num {
@@ -431,28 +450,26 @@ html, body {
 /* cada número se enciende del todo cuando llega su frase */
 .gato__num.is-dicho { opacity: 1; }
 
-/* Medidas tomadas del mockup: la tarjeta se ubica respecto de la pantalla,
-   no del encuadre de la ilustración, por eso cuelga del bloque anclado. */
+/* La ficha: blanca y a toda altura. Está siempre; lo que entra y sale es su
+   texto. */
 .gato__tarjeta {
-  position: absolute;
+  position: relative;
   z-index: 2;
-  left: 54.5%;
-  right: 16.3%;
-  top: 54%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: #fff;
   color: #141414;
-  padding: 1.55em 1.7em;
-  font-size: clamp(13px, 1.15vw, 22px);
-  opacity: 0;
-  transition: opacity 0.45s ease;
+  padding: 0 clamp(28px, 4.2vw, 80px);
+  font-size: clamp(18px, 1.6vw, 30px);
 }
 
-/* rótulo vertical del margen izquierdo */
+/* rótulo vertical del margen izquierdo de la escena */
 .gato__rotulo {
   position: absolute;
   z-index: 2;
-  left: 10.7%;
-  top: 26.2%;
+  left: 8%;
+  top: 26%;
   margin: 0;
   writing-mode: vertical-rl;
   transform: rotate(180deg);
@@ -472,7 +489,9 @@ html, body {
   white-space: nowrap;
 }
 
-.gato__tarjeta.is-in { opacity: 1; }
+/* el texto de la ficha entra con la primera frase */
+.gato__pila { opacity: 0; }
+.gato__tarjeta.is-in .gato__pila { opacity: 1; }
 
 /* La malla: al cerrarse la cadena, todos los puntos se unen con todos.
    Va más fina y a media opacidad para que la cadena original siga leyéndose
@@ -512,7 +531,7 @@ html, body {
    más larga y dejar un hueco blanco con las cortas. */
 .gato__pila {
   position: relative;
-  transition: height 0.55s cubic-bezier(0.33, 0.9, 0.4, 1);
+  transition: height 0.55s cubic-bezier(0.33, 0.9, 0.4, 1), opacity 0.45s ease;
 }
 
 .gato__frase {
@@ -534,7 +553,7 @@ html, body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gato__num, .gato__tarjeta { opacity: 1; transform: none; transition: none; }
+  .gato__num, .gato__pila { opacity: 1; transition: none; }
   /* sin animación no hay reemplazo posible: se listan una debajo de otra */
   .gato__pila { height: auto !important; }
   .gato__malla path { transition: none; }
@@ -728,22 +747,6 @@ html, body {
   .probs__punto::before { transition: none; }
 }
 
-/* franja de transición entre secciones: las dos texturas de puntos se
-   entremezclan en vez de cortarse en seco */
-.difuminado {
-  position: relative;
-  width: 100%;
-  height: 34svh;
-  min-height: 180px;
-  line-height: 0;
-}
-
-.difuminado canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
 /* ================= móvil =================
    En pantalla angosta los marcos de referencia colapsan a una franja de
    ~375x250 y todo lo que se dimensiona contra ellos queda en 2-8px. La
@@ -857,37 +860,29 @@ html, body {
   .quehace__progreso { top: 49.5%; font-size: 10px; }
 
   /* ---- sección del gato ----
-     Mantiene el anclaje: su coreografía es el sentido de la sección. La
-     tarjeta baja debajo del gato, donde hay sitio de sobra. */
+     Mantiene el anclaje: su coreografía es el sentido de la sección. El gato
+     arriba y la ficha blanca debajo, a todo el ancho.
+
+     La escena se amplía 1,8 veces y se corre a la derecha, como en la maqueta:
+     sin ampliar, el gato cae en una franja de 258 px de alto y los trazos que
+     unen los números miden 40 px, que no se leen. A 56% del alto la escena
+     mide lo mismo que el marco ampliado en un teléfono de 390 x 844. */
   .gato { height: 560svh; }
 
-  /* La escena se amplía 1,8 veces y se corre a la derecha, como en la maqueta:
-     con el encuadre de escritorio el gato cae en una franja de 258 px de alto
-     y los trazos que unen los números miden 40 px, que no se leen. El marco
-     lleva números, trazos y tarjeta; el lienzo se amplía igual desde app.js
-     (MOVIL_ZOOM y MOVIL_PAN), para que el gato siga debajo de sus números. */
-  .gato__marco {
-    width: 180%;
-    max-height: none;
-    transform: translateX(8.85%);   /* 15,9% del ancho del panel */
+  .gato__fijo {
+    grid-template-columns: 1fr;
+    grid-template-rows: 56% 44%;
+    --gz: 1.8;
+    --gt: 8.85%;
+    --alto-escena: 56svh;
   }
 
-  /* La tarjeta y el rótulo cuelgan del panel, no del marco: la ampliación de
-     la escena no les afecta y siguen midiéndose contra la pantalla. */
-  /* La maqueta la arranca en 41.4%, pero con ese ancho la frase 5 —la más
-     larga, 187 caracteres— crece a 258 px y llega justo al borde inferior de
-     la pantalla. Ensanchando a 28% baja a 191 px y le quedan 68 px de aire,
-     el mismo que ya tienen las frases 1 y 3. Más ancho no gana nada: 191 es
-     el suelo. Va abajo del gato, así que no le tapa nada. */
   .gato__tarjeta {
-    left: 28%;
-    right: 9.3%;
-    top: 69.4%;
-    padding: 1.1em 1.2em;
-    font-size: 15px;
+    padding: 0 7vw;
+    font-size: 16px;
   }
 
-  .gato__rotulo { left: 16.1%; top: 21%; font-size: 9px; }
+  .gato__rotulo { left: 5%; top: 10%; font-size: 9px; }
   .gato__clave { margin-right: 1.6em; }
   .gato__num { font-size: 12px; }
 
@@ -1001,8 +996,6 @@ html, body {
   .probs__punto { width: 20px; height: 20px; }
   .probs__punto::before { width: 3px; height: 3px; }
 
-  /* ---- franjas de difuminado ---- */
-  .difuminado { height: 22svh; min-height: 120px; }
 }
 
 /* Pantallas bajas (un teléfono pequeño, o cualquiera en apaisado). La

@@ -635,10 +635,9 @@ let campoMano = null;
    una curva a medio camino entre un círculo y la silueta de la mano.
 
    Las cuatro fases son un menú desplegable: el scroll abre una cada vez, por
-   cuartos del recorrido, y cada una que se abre deshace en puntos la última
-   falange de un dedo —índice, medio, anular, meñique—. Las ya deshechas se
-   quedan así: la mano va mostrando cuánto del proceso se ha recorrido. Al
-   subir se recomponen. */
+   cuartos del recorrido, y la que está abierta deshace en puntos la última
+   falange de su dedo —índice, medio, anular, meñique—. Un dedo cada vez: al
+   cerrarse la fase su dedo se recompone. */
 (function () {
   const sec = document.getElementById('quehace');
   const marco = sec && sec.querySelector('.quehace__marco');
@@ -866,11 +865,16 @@ let campoMano = null;
         el.querySelector('.mf__cab').setAttribute('aria-expanded', k === i ? 'true' : 'false');
       });
     }
-    // cada ítem que se abre deshace su dedo; los anteriores siguen deshechos
-    if (campoMano) for (let k = 0; k < N_FASES; k++) {
-      let a = (q - k / N_FASES) / TRAMO_DEDO;
-      a = a < 0 ? 0 : a > 1 ? 1 : a;
-      campoMano.dispersar(k, a * a * (3 - 2 * a));
+    // Un dedo deshecho cada vez: el de la fase abierta. Se deshace al abrirse
+    // y se recompone al cerrarse, con el mismo fundido en los dos sentidos.
+    // El último se queda deshecho hasta el final del recorrido.
+    if (campoMano) {
+      const sube = (x) => { x = x < 0 ? 0 : x > 1 ? 1 : x; return x * x * (3 - 2 * x); };
+      for (let k = 0; k < N_FASES; k++) {
+        const entra = sube((q - k / N_FASES) / TRAMO_DEDO);
+        const sale = k < N_FASES - 1 ? sube((q - (k + 1) / N_FASES) / TRAMO_DEDO) : 0;
+        campoMano.dispersar(k, entra * (1 - sale));
+      }
     }
   }
 
@@ -935,29 +939,39 @@ let campoMano = null;
 })();
 
 /* ---- sección del gato ----
-   El canvas y el marco usan el mismo encuadre "contain", así los números
-   caen siempre sobre el mismo punto del gato. */
-const MOVIL_ZOOM = 1.8;    // ver .gato__marco: width 180%
-const MOVIL_PAN = 0.159;   // ver .gato__marco: translateX(8.85%)
+   El lienzo y el marco de los números usan el mismo encuadre "contain" sobre
+   la escena, ampliado y corrido igual, así los números caen siempre sobre el
+   mismo punto del gato. Estos dos pares tienen que coincidir con --gz y --gt
+   de .gato__fijo en style.css: si uno cambia sin el otro, los números se
+   despegan del gato. */
+const GATO_ZOOM = { escritorio: 1.6, movil: 1.8 };
+const GATO_PAN = { escritorio: 0.095, movil: 0.0885 };   // en fracción del marco ampliado
 (function () {
   const c = document.getElementById('gatoCanvas');
   if (!c) return;
+  const modo = () => (window.innerWidth <= 900 ? 'movil' : 'escritorio');
   createDotField(c, {
     src: 'gato-src.jpg',
     paper: 10,
     grano: GRANO,
     negro: [0.06, 0.10],
     fit: 'contain',
-    // En móvil el 'contain' deja al gato en una franja de 258 px de alto: los
-    // trazos que unen los números quedan de 40 px y no se leen. La maqueta lo
-    // trae 1,8 veces más grande y corrido a la derecha. El mismo par de
-    // números está en .gato__marco, que es quien lleva números y trazos.
-    zoom: () => (window.innerWidth <= 900 ? MOVIL_ZOOM : 1),
-    panX: () => (window.innerWidth <= 900 ? MOVIL_PAN : 0),
+    // La fuente trae mucho margen alrededor del gato: en media pantalla, sin
+    // ampliar, quedaría pequeño y los trazos entre números no se leerían.
+    zoom: () => GATO_ZOOM[modo()],
+    // El marco se corre un tanto por ciento de su propio ancho; el lienzo lo
+    // expresa en fracción del suyo. Son lo mismo sólo si el encuadre llena el
+    // ancho de la escena, así que se convierte con el ancho real del encuadre.
+    panX: () => {
+      const r = c.getBoundingClientRect();
+      if (!r.width) return 0;
+      const base = Math.min(r.width, r.height * 2560 / 1696);
+      return GATO_PAN[modo()] * GATO_ZOOM[modo()] * base / r.width;
+    },
     // el gato es una figura fina: con poca densidad las zonas brillantes no
-    // llegan a leerse como trazo lleno. Ampliado 1,8 veces cubre el triple de
-    // área, así que en móvil hay que sembrar más para que no se adelgace.
-    pxPerDot: () => (window.innerWidth <= 900 ? 5 : 9),
+    // llegan a leerse como trazo lleno. Ampliado cubre mucha más área, así que
+    // hay que sembrar más para que no se adelgace.
+    pxPerDot: () => (window.innerWidth <= 900 ? 5 : 6),
     maxDots: 220000,
     wGamma: 1.6,
     prepare: limpiarGato
@@ -1303,142 +1317,6 @@ function limpiarProblemas(cx, w, h) {
 
   cx.putImageData(im, 0, 0);
 }
-
-/* ---- difuminado entre secciones ----
-   Una franja donde las dos texturas de puntos se entremezclan: la del fondo
-   que sale se va raleando mientras entra la del que llega, sobre una rampa
-   entre los dos papeles. Evita el corte seco de negro a claro. */
-function createDifuminado(canvas, opts) {
-  const o = Object.assign({
-    papelA: 10, tintaA: 120, densA: 0.10,   // el fondo de arriba
-    papelB: 243, tintaB: 205, densB: 0.03,  // el de abajo
-    extra: 0.30,      // cuánta densidad de más en el centro de la franja
-    maxScale: 1.25
-  }, opts || {});
-
-  const ctx = canvas.getContext('2d', { alpha: false });
-  const reducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  const LUT = 1024, MASK = LUT - 1;
-  const SIN = new Float32Array(LUT);
-  for (let i = 0; i < LUT; i++) SIN[i] = Math.sin((i / LUT) * Math.PI * 2);
-
-  let W = 0, H = 0, count = 0, raf = 0, corriendo = false, timer = 0;
-  let px, py, pv, ph, sp, amp, fondo32, buf32, imageData, lastIdx, lastN = 0;
-
-  const suave = (t) => t * t * (3 - 2 * t);
-  const mezcla = (a, b, t) => a + (b - a) * t;
-
-  function sembrar() {
-    // fondo: rampa entre los dos papeles
-    imageData = ctx.createImageData(W, H);
-    buf32 = new Uint32Array(imageData.data.buffer);
-    fondo32 = new Uint32Array(W * H);
-    for (let y = 0; y < H; y++) {
-      const v = Math.round(mezcla(o.papelA, o.papelB, suave(y / (H - 1)))) & 255;
-      const c = (0xff000000 | (v << 16) | (v << 8) | v) >>> 0;
-      for (let x = 0; x < W; x++) fondo32[y * W + x] = c;
-    }
-
-    // puntos: los de cada lado se ralean o entran según la altura
-    const est = [];
-    for (let y = 0; y < H; y++) {
-      const p = y / (H - 1), e = suave(p);
-      const d = mezcla(o.densA, o.densB, e) + o.extra * Math.sin(Math.PI * p);
-      est.push({ d: d, e: e });
-    }
-    let total = 0;
-    for (let y = 0; y < H; y++) total += est[y].d * W;
-    const cap = Math.ceil(total * 1.25);
-
-    px = new Int32Array(cap); py = new Int32Array(cap);
-    pv = new Uint8Array(cap); ph = new Uint16Array(cap);
-    sp = new Float32Array(cap); amp = new Float32Array(cap);
-
-    let c = 0;
-    for (let y = 0; y < H && c < cap; y++) {
-      const { d, e } = est[y];
-      for (let x = 0; x < W && c < cap; x++) {
-        if (Math.random() >= d) continue;
-        // el punto pertenece al lado que todavía manda a esa altura
-        const deA = Math.random() > e;
-        const tinta = deA ? o.tintaA : o.tintaB;
-        const base = mezcla(o.papelA, o.papelB, e);
-        px[c] = x; py[c] = y;
-        pv[c] = Math.max(0, Math.min(255, Math.round(mezcla(base, tinta, 0.65 + Math.random() * 0.35))));
-        ph[c] = Math.random() * LUT | 0;
-        // El lado oscuro titila como el grano de las secciones oscuras, para
-        // que la franja empalme con ellas sin que se note el cambio de lienzo.
-        // El lado de papel conserva su titileo más suave.
-        if ((deA ? o.papelA : o.papelB) < 128) {
-          sp[c] = (0.6 + Math.random() * 2.2) * GRANO.fizz;
-          amp[c] = (0.18 + Math.random() * 0.3) * GRANO.fizz;
-        } else {
-          sp[c] = (0.5 + Math.random() * 2) * 2.2;
-          amp[c] = (0.1 + Math.random() * 0.22) * 2.2;
-        }
-        c++;
-      }
-    }
-    count = c;
-    lastIdx = new Int32Array(count);
-    lastN = 0;
-    buf32.set(fondo32);
-  }
-
-  function pintar(t) {
-    for (let i = 0; i < lastN; i++) buf32[lastIdx[i]] = fondo32[lastIdx[i]];
-    let ln = 0;
-    for (let i = 0; i < count; i++) {
-      const f = t === null ? 0 : SIN[(ph[i] + (t * sp[i] * LUT * 0.16 | 0)) & MASK];
-      const idx = py[i] * W + px[i];
-      const base = fondo32[idx] & 0xff;
-      let v = base + (pv[i] - base) * (1 + amp[i] * f);
-      if (v < 0) v = 0; else if (v > 255) v = 255;
-      const g = v | 0;
-      buf32[idx] = (0xff000000 | (g << 16) | (g << 8) | g) >>> 0;
-      lastIdx[ln++] = idx;
-    }
-    lastN = ln;
-    ctx.putImageData(imageData, 0, 0);
-  }
-
-  function cuadro(now) { pintar(now * 0.001); raf = requestAnimationFrame(cuadro); }
-  function start() { if (corriendo || reducido || !buf32) return; corriendo = true; raf = requestAnimationFrame(cuadro); }
-  function stop() { corriendo = false; if (raf) cancelAnimationFrame(raf); raf = 0; }
-
-  function medir() {
-    const r = canvas.getBoundingClientRect();
-    if (!r.width || !r.height) return;
-    const dpr = Math.min(window.devicePixelRatio || 1, o.maxScale);
-    const w = Math.max(1, Math.round(r.width * dpr));
-    const h = Math.max(1, Math.round(r.height * dpr));
-    if (w === W && h === H) return;
-    W = w; H = h; canvas.width = W; canvas.height = H;
-    sembrar();
-    pintar(reducido ? null : 0);
-  }
-
-  medir();
-  window.addEventListener('resize', function () { clearTimeout(timer); timer = setTimeout(medir, 180); });
-  document.addEventListener('visibilitychange', function () { document.hidden ? stop() : start(); });
-  if ('IntersectionObserver' in window) {
-    new IntersectionObserver(function (es) { es[0].isIntersecting ? start() : stop(); },
-      { rootMargin: '100px' }).observe(canvas);
-  } else start();
-
-  return { start: start, stop: stop };
-}
-
-(function () {
-  document.querySelectorAll('.difuminado canvas').forEach(function (c) {
-    const d = c.parentNode.dataset;
-    createDifuminado(c, {
-      papelA: +d.papelA, tintaA: +d.tintaA, densA: +d.densA,
-      papelB: +d.papelB, tintaB: +d.tintaB, densB: +d.densB
-    });
-  });
-})();
 
 /* ---- interruptor de idioma ----
    El texto que vive en el HTML se reescribe aquí; el que vive en arrays lo

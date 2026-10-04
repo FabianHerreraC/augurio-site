@@ -3,7 +3,11 @@
 Sitio de una sola página. Cuatro secciones sobre un mismo motor de campo de
 puntos, con la coreografía atada al scroll.
 
-    header  →  gato  →  [difuminado]  →  mano  →  [difuminado]  →  problemas
+    header  →  gato  →  mano  →  problemas
+
+Sin transición entre secciones: el paso de negro a papel y de papel a negro es
+un corte seco. Hasta octubre de 2026 había franjas de difuminado de puntos entre
+ellas; se quitaron.
 
 Sin dependencias ni build. Son tres archivos: `index.html`, `style.css`,
 `app.js`.
@@ -138,10 +142,11 @@ abre la siguiente por cuartos del recorrido, y el primero está abierto desde
 que la sección se ancla. El cuerpo se despliega animando `grid-template-rows`
 de 0fr a 1fr. Al pulsar un título, el scroll va al centro de su cuarto.
 
-Cada fase que se abre deshace la última falange de un dedo —índice, medio,
-anular, meñique; el pulgar se queda—, en 0.09 de recorrido. Las ya deshechas
-siguen así: la mano va mostrando cuánto del proceso se ha recorrido. Al subir
-se recomponen.
+La fase abierta deshace la última falange de su dedo —índice, medio, anular,
+meñique; el pulgar se queda—. **Un dedo cada vez:** al abrirse la fase el dedo
+se deshace en 0.09 de recorrido y al cerrarse se recompone en otro tanto, con
+el mismo fundido, mientras se deshace el siguiente. El último sigue deshecho
+hasta el final. Al subir se invierte.
 
 Las puntas (`DEDOS` en app.js) se midieron sobre mano-src.jpg con el perfil
 radial desde el centroide de la mano: los picos son las puntas y los valles
@@ -214,22 +219,39 @@ contenedor, así que `max(10px, 0.7%)` da siempre 10px. Para que la tipografía
 del header escale con la pantalla tiene que ir en `vw`. Las anchuras sí pueden
 ir en `%`, que ahí sí es del contenedor.
 
-### La tarjeta y el rótulo del gato **no** cuelgan del marco
+### El gato: escena a un lado, ficha al otro
 
-`.gato__tarjeta` y `.gato__rotulo` son hermanos de `.gato__marco`, hijos de
-`.gato__fijo`. Sus porcentajes son del **panel**, no del marco. Ampliar el
-marco no los mueve, y recolocarlos con porcentajes del marco los deja del
-tamaño equivocado.
+`.gato__fijo` es una rejilla de dos piezas: `.gato__escena` (lienzo, marco de
+números y rótulo) y `.gato__tarjeta`, la ficha blanca. En escritorio, columnas
+58% · 42%, con la ficha a toda altura; en móvil, filas 56% · 44%, con la ficha
+a todo el ancho debajo. La ficha está siempre; lo que entra con la primera
+frase es su texto (`.gato__pila`).
 
-### El zoom del gato en móvil vive en dos archivos
+El rótulo vive dentro de la escena y se mide contra ella.
 
-`MOVIL_ZOOM = 1.8` y `MOVIL_PAN = 0.159` en `app.js` amplían el **lienzo**.
-`.gato__marco { width: 180%; transform: translateX(8.85%) }` amplía el **marco**,
-que es quien lleva números, trazos y malla. Si uno cambia sin el otro, los
-números dejan de caer sobre el gato.
+### El zoom del gato vive en dos archivos
 
-`translateX` es un porcentaje del propio marco: 8.85% de 180% = 15.9% del panel,
-que es `MOVIL_PAN`.
+El lienzo y el marco de los números parten del encuadre contain **de la
+escena** y se amplían y corren igual:
+
+| | ampliación | corrimiento (en % del marco ampliado) |
+|---|---|---|
+| escritorio | 1.6 | 9.5% |
+| móvil | 1.8 | 8.85% |
+
+En `app.js` son `GATO_ZOOM` y `GATO_PAN`; en `style.css`, `--gz` y `--gt` de
+`.gato__fijo`. Si uno cambia sin el otro, los números dejan de caer sobre el
+gato. La sonda lo comprueba midiendo el ancho del marco contra la escena.
+
+El lienzo expresa su corrimiento en fracción de su propio ancho y el marco en
+fracción del suyo; sólo coinciden si el encuadre llena el ancho de la escena.
+Por eso `panX` se convierte con el ancho real del encuadre,
+`min(ancho, alto × 2560/1696)`, y aguanta escenas apaisadas.
+
+La ampliación existe porque la fuente trae mucho margen alrededor del gato:
+sin ella, en media pantalla, la constelación abarcaba un 35% de la escena y los
+trazos entre números no se leían. Ahora abarca un 56% en escritorio y un 63% en
+móvil.
 
 ### Reemplazar un bloque entero de app.js se lleva a los vecinos
 
