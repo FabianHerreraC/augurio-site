@@ -357,6 +357,13 @@ html, body {
   .mf__cab, .mf__cuerpo { transition: none; }
 }
 
+/* En escritorio estrecho la mano escala con el alto y el anillo ocupa más
+   ancho proporcional: a 976 de ancho quedaban 7 px entre él y el menú. Ahí
+   el menú se corre a la derecha y se estrecha un poco. */
+@media (min-width: 901px) and (max-width: 1150px) {
+  .menu-fases { left: 65.5%; width: 30%; }
+}
+
 /* ================= sección del gato =================
    .gato es sólo pista de scroll; .gato__fijo se ancla y no se mueve mientras
    se la recorre. Dentro, .gato__marco reproduce el encuadre de la referencia
